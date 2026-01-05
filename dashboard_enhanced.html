@@ -1,0 +1,356 @@
+<!-- web/dashboard/templates/dashboard_enhanced.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Trading Dashboard - Enhanced</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.3.2/dist/echarts.min.js"></script>
+</head>
+<body class="bg-gray-100">
+    <div id="app" class="min-h-screen">
+        <!-- Navigation -->
+        <nav class="bg-indigo-600">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div class="flex items-center justify-between h-16">
+                    <div class="flex items-center">
+                        <div class="flex-shrink-0 text-white font-bold text-xl">N5StyleEA</div>
+                        <div class="hidden md:block">
+                            <div class="ml-10 flex items-baseline space-x-4">
+                                <a href="#" class="px-3 py-2 rounded-md text-sm font-medium text-white bg-indigo-700">Dashboard</a>
+                                <a href="#" class="px-3 py-2 rounded-md text-sm font-medium text-white hover:bg-indigo-500">Positions</a>
+                                <a href="#" class="px-3 py-2 rounded-md text-sm font-medium text-white hover:bg-indigo-500">Trades</a>
+                                <a href="#" class="px-3 py-2 rounded-md text-sm font-medium text-white hover:bg-indigo-500">Risk Analysis</a>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="text-white">
+                        Welcome, <span id="username" class="font-medium">{{ user.username }}</span>
+                        <button id="logout" class="ml-4 px-3 py-1 bg-red-500 rounded text-sm hover:bg-red-600">Logout</button>
+                    </div>
+                </div>
+            </div>
+        </nav>
+
+        <!-- Main Content -->
+        <main class="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
+            <!-- Market Overview -->
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+                <div class="bg-white overflow-hidden shadow rounded-lg">
+                    <div class="px-4 py-5 sm:p-6">
+                        <h3 class="text-lg leading-6 font-medium text-gray-900">Market Risk</h3>
+                        <div id="risk-gauge" style="height: 200px;"></div>
+                    </div>
+                </div>
+                
+                <div class="bg-white overflow-hidden shadow rounded-lg">
+                    <div class="px-4 py-5 sm:p-6">
+                        <h3 class="text-lg leading-6 font-medium text-gray-900">Portfolio Distribution</h3>
+                        <div id="portfolio-pie" style="height: 200px;"></div>
+                    </div>
+                </div>
+                
+                <div class="bg-white overflow-hidden shadow rounded-lg">
+                    <div class="px-4 py-5 sm:p-6">
+                        <h3 class="text-lg leading-6 font-medium text-gray-900">Performance</h3>
+                        <div id="performance-chart" style="height: 200px;"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Real-time Market Data -->
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+                <!-- Order Book -->
+                <div class="bg-white shadow overflow-hidden sm:rounded-lg col-span-1">
+                    <div class="px-4 py-5 sm:px-6 border-b border-gray-200">
+                        <h3 class="text-lg leading-6 font-medium text-gray-900">Order Book</h3>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full divide-y divide-gray-200">
+                            <thead class="bg-gray-50">
+                                <tr>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Price</th>
+                                    <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Amount</th>
+                                    <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Total</th>
+                                </tr>
+                            </thead>
+                            <tbody id="order-book" class="bg-white divide-y divide-gray-200">
+                                <!-- Filled by JavaScript -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Price Chart -->
+                <div class="bg-white shadow overflow-hidden sm:rounded-lg col-span-2">
+                    <div class="px-4 py-5 sm:px-6 border-b border-gray-200">
+                        <div class="flex justify-between items-center">
+                            <h3 class="text-lg leading-6 font-medium text-gray-900">BTC/USDT</h3>
+                            <div class="flex space-x-2">
+                                <button class="timeframe-btn px-3 py-1 bg-indigo-100 text-indigo-700 rounded text-sm" data-timeframe="1m">1m</button>
+                                <button class="timeframe-btn px-3 py-1 bg-white text-gray-700 rounded text-sm" data-timeframe="5m">5m</button>
+                                <button class="timeframe-btn px-3 py-1 bg-white text-gray-700 rounded text-sm" data-timeframe="15m">15m</button>
+                                <button class="timeframe-btn px-3 py-1 bg-white text-gray-700 rounded text-sm" data-timeframe="1h">1h</button>
+                                <button class="timeframe-btn px-3 py-1 bg-white text-gray-700 rounded text-sm" data-timeframe="1d">1d</button>
+                            </div>
+                        </div>
+                    </div>
+                    <div id="price-chart" style="height: 400px;"></div>
+                </div>
+            </div>
+
+            <!-- Risk Analysis -->
+            <div class="bg-white shadow overflow-hidden sm:rounded-lg mb-8">
+                <div class="px-4 py-5 sm:px-6 border-b border-gray-200">
+                    <h3 class="text-lg leading-6 font-medium text-gray-900">Risk Analysis</h3>
+                </div>
+                <div class="p-6">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div>
+                            <h4 class="text-md font-medium text-gray-900 mb-4">Feature Importance</h4>
+                            <div id="feature-importance" style="height: 300px;"></div>
+                        </div>
+                        <div>
+                            <h4 class="text-md font-medium text-gray-900 mb-4">Risk Factors</h4>
+                            <div id="risk-factors" class="space-y-4">
+                                <!-- Filled by JavaScript -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        // Initialize WebSocket connections
+        const marketDataWs = new WebSocket(`ws://${window.location.host}/ws/market-data`);
+        const tradesWs = new WebSocket(`ws://${window.location.host}/ws/trades`);
+
+        // Initialize charts
+        const riskGauge = echarts.init(document.getElementById('risk-gauge'));
+        const portfolioPie = echarts.init(document.getElementById('portfolio-pie'));
+        const priceChart = echarts.init(document.getElementById('price-chart'));
+        const featureImportance = echarts.init(document.getElementById('feature-importance'));
+
+        // Handle WebSocket messages
+        marketDataWs.onmessage = (event) => {
+            const data = JSON.parse(event.data);
+            updateMarketData(data);
+        };
+
+        tradesWs.onmessage = (event) => {
+            const trade = JSON.parse(event.data);
+            updateTrades(trade);
+        };
+
+        // Update market data
+        function updateMarketData(data) {
+            // Update price chart
+            // Update order book
+            // Update risk indicators
+        }
+
+        // Update trades
+        function updateTrades(trade) {
+            // Update recent trades table
+            // Update performance metrics
+        }
+
+        // Initialize charts
+        function initCharts() {
+            // Risk gauge
+            riskGauge.setOption({
+                series: [{
+                    type: 'gauge',
+                    progress: {
+                        show: true,
+                        width: 18
+                    },
+                    axisLine: {
+                        lineStyle: {
+                            width: 18
+                        }
+                    },
+                    axisTick: {
+                        show: false
+                    },
+                    splitLine: {
+                        length: 15,
+                        lineStyle: {
+                            width: 2,
+                            color: '#999'
+                        }
+                    },
+                    axisLabel: {
+                        distance: 25,
+                        color: '#999',
+                        fontSize: 14
+                    },
+                    anchor: {
+                        show: true,
+                        showAbove: true,
+                        size: 25,
+                        itemStyle: {
+                            borderWidth: 10
+                        }
+                    },
+                    title: {
+                        show: true
+                    },
+                    detail: {
+                        valueAnimation: true,
+                        fontSize: 20,
+                        offsetCenter: [0, '70%']
+                    },
+                    data: [{
+                        value: 70,
+                        name: 'Risk Score'
+                    }]
+                }]
+            });
+
+            // Portfolio pie chart
+            portfolioPie.setOption({
+                tooltip: {
+                    trigger: 'item'
+                },
+                legend: {
+                    top: '5%',
+                    left: 'center'
+                },
+                series: [
+                    {
+                        name: 'Portfolio',
+                        type: 'pie',
+                        radius: ['40%', '70%'],
+                        avoidLabelOverlap: false,
+                        itemStyle: {
+                            borderRadius: 10,
+                            borderColor: '#fff',
+                            borderWidth: 2
+                        },
+                        label: {
+                            show: false,
+                            position: 'center'
+                        },
+                        emphasis: {
+                            label: {
+                                show: true,
+                                fontSize: '18',
+                                fontWeight: 'bold'
+                            }
+                        },
+                        labelLine: {
+                            show: false
+                        },
+                        data: [
+                            { value: 45, name: 'BTC' },
+                            { value: 30, name: 'ETH' },
+                            { value: 15, name: 'SOL' },
+                            { value: 10, name: 'Other' }
+                        ]
+                    }
+                ]
+            });
+
+            // Price chart
+            priceChart.setOption({
+                tooltip: {
+                    trigger: 'axis',
+                    axisPointer: {
+                        type: 'cross'
+                    }
+                },
+                grid: {
+                    left: '3%',
+                    right: '4%',
+                    bottom: '3%',
+                    containLabel: true
+                },
+                xAxis: {
+                    type: 'category',
+                    data: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+                },
+                yAxis: {
+                    type: 'value',
+                    scale: true
+                },
+                series: [{
+                    data: [820, 932, 901, 934, 1290, 1330, 1320],
+                    type: 'line',
+                    smooth: true
+                }]
+            });
+
+            // Feature importance
+            featureImportance.setOption({
+                tooltip: {
+                    trigger: 'axis',
+                    axisPointer: {
+                        type: 'shadow'
+                    }
+                },
+                grid: {
+                    left: '3%',
+                    right: '4%',
+                    bottom: '3%',
+                    containLabel: true
+                },
+                xAxis: {
+                    type: 'value'
+                },
+                yAxis: {
+                    type: 'category',
+                    data: ['Volatility', 'Volume', 'Liquidity', 'Correlation', 'Momentum']
+                },
+                series: [
+                    {
+                        name: 'Importance',
+                        type: 'bar',
+                        data: [0.35, 0.25, 0.2, 0.15, 0.05]
+                    }
+                ]
+            });
+        }
+
+        // Initialize everything when the page loads
+        document.addEventListener('DOMContentLoaded', () => {
+            initCharts();
+            
+            // Handle logout
+            document.getElementById('logout').addEventListener('click', () => {
+                // Implement logout logic
+                window.location.href = '/logout';
+            });
+            
+            // Handle timeframe buttons
+            document.querySelectorAll('.timeframe-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    // Update active button
+                    document.querySelectorAll('.timeframe-btn').forEach(b => {
+                        b.classList.remove('bg-indigo-100', 'text-indigo-700');
+                        b.classList.add('bg-white', 'text-gray-700');
+                    });
+                    e.target.classList.remove('bg-white', 'text-gray-700');
+                    e.target.classList.add('bg-indigo-100', 'text-indigo-700');
+                    
+                    // Update chart data
+                    const timeframe = e.target.dataset.timeframe;
+                    updateChartTimeframe(timeframe);
+                });
+            });
+        });
+
+        // Handle window resize
+        window.addEventListener('resize', () => {
+            riskGauge.resize();
+            portfolioPie.resize();
+            priceChart.resize();
+            featureImportance.resize();
+        });
+    </script>
+</body>
+</html>

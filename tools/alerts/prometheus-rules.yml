@@ -1,0 +1,52 @@
+groups:
+- name: trading_observability
+  interval: 1m
+  rules:
+  - alert: OrdersFailedHigh5m
+    expr: rate(n5_counter_orders_failed_total[5m]) > 0
+    for: 5m
+    labels:
+      severity: warning
+    annotations:
+      summary: "Orders failing detected"
+      description: "rate(n5_counter_orders_failed_total[5m]) > 0 for 5m"
+  - alert: OrdersFailedCritical5m
+    expr: rate(n5_counter_orders_failed_total[5m]) > 0.05
+    for: 5m
+    labels:
+      severity: critical
+    annotations:
+      summary: "High rate of order failures"
+      description: "> 0.05/s over 5m"
+  - alert: WsErrorsHigh5m
+    expr: rate(n5_counter_ws_errors_total[5m]) > 0
+    for: 5m
+    labels:
+      severity: warning
+    annotations:
+      summary: "WebSocket errors detected"
+      description: "rate(n5_counter_ws_errors_total[5m]) > 0 for 5m"
+  - alert: WsReconnectionsBurst
+    expr: rate(n5_counter_ws_reconnects_total[5m]) > 0.2
+    for: 5m
+    labels:
+      severity: warning
+    annotations:
+      summary: "WebSocket reconnects elevated"
+      description: "> 0.2/s over 5m"
+  - alert: WsShutdownsDetected
+    expr: increase(n5_counter_ws_shutdowns_total[15m]) > 0
+    for: 1m
+    labels:
+      severity: critical
+    annotations:
+      summary: "WebSocket streaming shutdown occurred"
+      description: "One or more WS shutdowns in 15m"
+  - alert: CcxtOrderRetriesBurst
+    expr: rate(n5_counter_ccxt_order_retries_total[5m]) > 0.2
+    for: 5m
+    labels:
+      severity: warning
+    annotations:
+      summary: "Order retries elevated"
+      description: "> 0.2/s over 5m"

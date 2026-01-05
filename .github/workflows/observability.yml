@@ -1,0 +1,98 @@
+name: Observability and CI Gates
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+jobs:
+  prom-rules-validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install promtool
+        run: |
+          set -e
+          PROM_VERSION=2.48.1
+          curl -sL -o prom.tar.gz https://github.com/prometheus/prometheus/releases/download/v${PROM_VERSION}/prometheus-${PROM_VERSION}.linux-amd64.tar.gz
+          tar -xzf prom.tar.gz
+          sudo mv prometheus-${PROM_VERSION}.linux-amd64/promtool /usr/local/bin/promtool
+          promtool --version
+      - name: Validate Prometheus rules
+        run: |
+          promtool check rules tools/alerts/prometheus-rules.yml
+          promtool check rules tools/alerts/prometheus-rules-slo.yml
+
+  alertmanager-validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install amtool
+        run: |
+          set -e
+          AM_VERSION=0.26.0
+          curl -sL -o am.tar.gz https://github.com/prometheus/alertmanager/releases/download/v${AM_VERSION}/alertmanager-${AM_VERSION}.linux-amd64.tar.gz
+          tar -xzf am.tar.gz
+          sudo mv alertmanager-${AM_VERSION}.linux-amd64/amtool /usr/local/bin/amtool
+          amtool --version
+      - name: Validate Alertmanager config
+        run: |
+          amtool check-config tools/alerts/alertmanager.yml
+
+  smoke-tests:
+    runs-on: ubuntu-latest
+    env:
+      USE_EVENT_DRIVEN: "1"
+      USE_WS: "1"
+      PAPER_TRADING: "true"
+      WS_CHAOS_PROB: "0.1"
+      WS_RECONNECT_MAX: "3"
+      ENABLE_METRICS: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          if [ -f requirements-ci.txt ]; then pip install -r requirements-ci.txt; else pip install pytest pandas numpy psutil fastapi uvicorn jsonschema httpx ccxt; fi
+      - name: Run smoke tests (WS and shutdown)
+        run: |
+          pytest -q tests/integration/test_ws_and_event.py::test_ws_reconnect_counters_on_watch_error
+          pytest -q tests/integration/test_ws_and_event.py::test_event_loop_cancellation_triggers_ws_shutdown
+
+  snapshot-logs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          if [ -f requirements-ci.txt ]; then pip install -r requirements-ci.txt; else pip install pytest; fi
+      - name: Run JSON log snapshot tests
+        run: |
+          pytest -q tests/observability/test_log_snapshot.py
+
+  schema-gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          if [ -f requirements-ci.txt ]; then
+            pip install -r requirements-ci.txt
+          else
+            pip install pytest pandas numpy jsonschema
+          fi
+      - name: Run TCA schema and rollup tests
+        run: |
+          pytest -q tests/integration/test_tca_schema.py
+          pytest -q tests/integration/test_tca_rollup.py

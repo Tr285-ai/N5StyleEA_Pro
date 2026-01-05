@@ -1,0 +1,18 @@
+docs/
+├── source/
+│   ├── _static/
+│   ├── _templates/
+│   ├── getting_started/
+│   │   ├── installation.rst
+│   │   └── quickstart.rst
+│   ├── user_guide/
+│   │   ├── configuration.rst
+│   │   └── strategies.rst
+│   ├── api_reference/
+│   │   └── index.rst
+│   ├── development/
+│   │   └── contributing.rst
+│   ├── conf.py
+│   └── index.rst
+├── Makefile
+└── requirements-docs.txt

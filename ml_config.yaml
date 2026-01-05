@@ -1,0 +1,18 @@
+# config/ml_config.yaml
+ml:
+  openai_api_key: "your_openai_api_key"
+  ai_model: "gpt-4"
+  
+  evolving_trader:
+    input_size: 10
+    population_size: 20
+    generations: 50
+    
+  micro_models:
+    n_models: 5
+    lookback: 60
+    prediction_horizon: 5
+    
+  ensemble:
+    n_models: 3
+    retrain_interval: 3600  # seconds

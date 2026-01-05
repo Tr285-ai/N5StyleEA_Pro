@@ -1,0 +1,61 @@
+# .github/workflows/performance-tests.yml
+name: Performance Tests
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+  schedule:
+    - cron: '0 0 * * *'  # Daily at midnight
+
+jobs:
+  performance-tests:
+    runs-on: ubuntu-latest
+    
+    services:
+      redis:
+        image: redis:latest
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+    - uses: actions/checkout@v2
+    
+    - name: Set up Python
+      uses: actions/setup-python@v2
+      with:
+        python-version: '3.9'
+        
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install -r requirements-dev.txt
+        pip install pytest pytest-asyncio pytest-benchmark pytest-html
+        
+    - name: Run performance tests
+      run: |
+        python run_performance_tests.py --html-report
+        
+    - name: Upload performance report
+      if: always()
+      uses: actions/upload-artifact@v2
+      with:
+        name: performance-report
+        path: test_results/performance_report.html
+        
+    - name: Check for performance regressions
+      id: performance
+      run: |
+        # This would parse the test results and fail the build if there are regressions
+        # In a real implementation, this would be more sophisticated
+        if grep -q "FAIL" test_results/performance_summary.txt; then
+          echo "::error::Performance regression detected"
+          exit 1
+        fi

@@ -1,0 +1,97 @@
+async def load_state(self, filepath: Union[str, Path]) -> None:
+    """Load the state of the trading system from a file.
+    
+    Args:
+        filepath: Path to the saved state file.
+        
+    Raises:
+        FileNotFoundError: If the state file doesn't exist.
+        json.JSONDecodeError: If the file contains invalid JSON.
+        KeyError: If required fields are missing in the state.
+        ValueError: If datetime parsing fails.
+    """
+    try:
+        # Convert to Path object if it's a string
+        path = Path(filepath) if isinstance(filepath, str) else filepath
+        
+        # Check if file exists
+        if not path.exists():
+            raise FileNotFoundError(f"State file not found: {path}")
+            
+        # Read and parse the file
+        try:
+            with open(path, 'r') as f:
+                state = json.load(f)
+        except json.JSONDecodeError as e:
+            self.logger.error(f"Invalid JSON in state file {path}: {e}")
+            raise
+            
+        # Validate required fields
+        required_fields = ['balance', 'available_balance', 'equity']
+        for field in required_fields:
+            if field not in state:
+                raise KeyError(f"Missing required field in state: {field}")
+                
+        # Update basic account info
+        self.balance = state['balance']
+        self.available_balance = state['available_balance']
+        self.equity = state['equity']
+        self.initial_balance = state.get('initial_balance', self.balance)
+        
+        # Clear existing data
+        self.positions.clear()
+        self.trades.clear()
+        
+        # Load positions
+        for pos_data in state.get('positions', []):
+            try:
+                self.positions[pos_data['symbol']] = Position(
+                    symbol=pos_data['symbol'],
+                    size=pos_data['size'],
+                    entry_price=pos_data['entry_price'],
+                    current_price=pos_data.get('current_price', pos_data['entry_price']),
+                    entry_time=datetime.fromisoformat(pos_data['entry_time']),
+                    stop_loss=pos_data.get('stop_loss'),
+                    take_profit=pos_data.get('take_profit')
+                )
+            except KeyError as e:
+                self.logger.warning(f"Skipping invalid position data (missing {e}): {pos_data}")
+                continue
+            except ValueError as e:
+                self.logger.warning(f"Skipping position with invalid datetime: {e}")
+                continue
+                
+        # Load trades
+        for trade_data in state.get('trades', []):
+            try:
+                close_time = (datetime.fromisoformat(trade_data['close_time']) 
+                            if trade_data.get('close_time') else None)
+                            
+                self.trades.append(Trade(
+                    id=trade_data['id'],
+                    symbol=trade_data['symbol'],
+                    side=trade_data['side'],
+                    price=trade_data['price'],
+                    size=trade_data['size'],
+                    timestamp=datetime.fromisoformat(trade_data['timestamp']),
+                    status=trade_data.get('status', 'closed'),
+                    stop_loss=trade_data.get('stop_loss'),
+                    take_profit=trade_data.get('take_profit'),
+                    close_price=trade_data.get('close_price'),
+                    close_time=close_time,
+                    pnl=trade_data.get('pnl'),
+                    pnl_pct=trade_data.get('pnl_pct')
+                ))
+            except KeyError as e:
+                self.logger.warning(f"Skipping invalid trade data (missing {e}): {trade_data}")
+                continue
+            except ValueError as e:
+                self.logger.warning(f"Skipping trade with invalid datetime: {e}")
+                continue
+                
+        self.logger.info(f"Successfully loaded trading system state from {path}")
+        
+    except Exception as e:
+        self.logger.error(f"Failed to load state from {filepath}: {e}")
+        # Re-raise the exception to allow the caller to handle it
+        raise

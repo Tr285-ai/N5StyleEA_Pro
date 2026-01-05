@@ -1,0 +1,89 @@
+groups:
+- name: trading_slos
+  interval: 1m
+  rules:
+  # Order success rate SLO (99% over 5m)
+  - record: orders_received_5m
+    expr: increase(n5_counter_orders_received_total[5m])
+  - record: orders_failed_5m
+    expr: increase(n5_counter_orders_failed_total[5m])
+  - record: orders_success_rate_5m
+    expr: (orders_received_5m - orders_failed_5m) / clamp_min(orders_received_5m, 1)
+  - alert: OrdersSuccessRateLow
+    expr: (orders_success_rate_5m < 0.99) and (orders_received_5m > 0)
+    for: 10m
+    labels:
+      severity: warning
+    annotations:
+      summary: "Order success rate below SLO"
+      description: "orders_success_rate_5m < 0.99 for 10m"
+
+  # WS stability SLO: error rate threshold (over 5m)
+  - record: ws_errors_5m
+    expr: increase(n5_counter_ws_errors_total[5m])
+  - record: ws_reconnects_5m
+    expr: increase(n5_counter_ws_reconnects_total[5m])
+  - record: ws_error_rate_5m
+    expr: ws_errors_5m / clamp_min(ws_reconnects_5m + ws_errors_5m, 1)
+  - alert: WsErrorRateHigh
+    expr: ws_error_rate_5m > 0.5
+    for: 10m
+    labels:
+      severity: warning
+    annotations:
+      summary: "WS error rate elevated"
+      description: ">50% errors among reconnect+error events over 10m"
+
+  # Error budget burn approximation: orders_failed over window
+  - alert: ErrorBudgetBurnOrders
+    expr: rate(n5_counter_orders_failed_total[30m]) > 0.02
+    for: 15m
+    labels:
+      severity: critical
+    annotations:
+      summary: "Orders error budget burning fast"
+      description: ">0.02/s failed orders sustained over 15m"
+
+  # Multi-window SLO burn rate alerts (target SLO 99.5%)
+  - record: orders_received_1h
+    expr: increase(n5_counter_orders_received_total[1h])
+  - record: orders_failed_1h
+    expr: increase(n5_counter_orders_failed_total[1h])
+  - record: orders_error_rate_5m
+    expr: orders_failed_5m / clamp_min(orders_received_5m, 1)
+  - record: orders_error_rate_1h
+    expr: orders_failed_1h / clamp_min(orders_received_1h, 1)
+  - record: orders_received_30m
+    expr: increase(n5_counter_orders_received_total[30m])
+  - record: orders_failed_30m
+    expr: increase(n5_counter_orders_failed_total[30m])
+  - record: orders_error_rate_30m
+    expr: orders_failed_30m / clamp_min(orders_received_30m, 1)
+  - record: orders_received_6h
+    expr: increase(n5_counter_orders_received_total[6h])
+  - record: orders_failed_6h
+    expr: increase(n5_counter_orders_failed_total[6h])
+  - record: orders_error_rate_6h
+    expr: orders_failed_6h / clamp_min(orders_received_6h, 1)
+
+  # Fast burn: alert when burn rate > 14.4 on both 5m and 1h
+  - alert: OrdersErrorBudgetBurnFast
+    expr: (orders_error_rate_5m / 0.005 > 14.4) and (orders_error_rate_1h / 0.005 > 14.4)
+    for: 2m
+    labels:
+      severity: critical
+    annotations:
+      summary: "Orders SLO error budget burn rate high (fast)"
+      description: >
+        14.4x budget burn for 5m and 1h windows (SLO 99.5%)
+
+  # Slow burn: alert when burn rate > 6 on both 30m and 6h
+  - alert: OrdersErrorBudgetBurnSlow
+    expr: (orders_error_rate_30m / 0.005 > 6) and (orders_error_rate_6h / 0.005 > 6)
+    for: 15m
+    labels:
+      severity: warning
+    annotations:
+      summary: "Orders SLO error budget burn rate elevated (slow)"
+      description: >
+        6x budget burn for 30m and 6h windows (SLO 99.5%)

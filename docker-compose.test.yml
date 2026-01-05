@@ -1,0 +1,27 @@
+version: '3.8'
+
+services:
+  test:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: test
+    environment:
+      - TESTING=true
+      - LOG_LEVEL=DEBUG
+    volumes:
+      - .:/app
+    command: >
+      sh -c "pytest tests/ -v --cov=."
+    depends_on:
+      - redis
+
+  redis:
+    image: redis:alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 1s
+      timeout: 3s
+      retries: 30

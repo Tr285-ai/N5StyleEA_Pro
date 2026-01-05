@@ -1,0 +1,471 @@
+# Trading System Configuration
+
+# Infrastructure Settings
+infrastructure:
+  # Colocation settings
+  colocation:
+    enabled: true
+    provider: "equinix"  # or aws, gcp, azure, etc.
+    regions:
+      - id: "ny4"
+        name: "New York"
+        exchange_connectivity:
+          - exchange: "nyse"
+            latency_ms: 0.5
+          - exchange: "nasdaq"
+            latency_ms: 0.7
+      - id: "ld4"
+        name: "London"
+        exchange_connectivity:
+          - exchange: "lse"
+            latency_ms: 0.3
+      - id: "ty3"
+        name: "Tokyo"
+        exchange_connectivity:
+          - exchange: "tse"
+            latency_ms: 0.4
+  
+  # Network settings
+  network:
+    primary_provider: "zayo"
+    backup_provider: "cogent"
+    latency_threshold_ms: 5.0
+    packet_loss_threshold: 0.1  # %
+    monitoring_interval: 1  # seconds
+  
+  # Hardware acceleration
+  hardware_acceleration:
+    enabled: true
+    type: "fpga"  # or "asic"
+    vendor: "xilinx"  # or "intel", "lattice", etc.
+    model: "alveo-u250"
+    fallback_to_software: true
+
+# Monitoring Settings
+monitoring:
+  # Dashboard settings
+  dashboard:
+    enabled: true
+    host: "0.0.0.0"
+    port: 8000
+    auth_required: true
+    username: "admin"
+    password: "changeme"  # Change this in production!
+    ssl_enabled: true
+  
+  # Alerting settings
+  alerting:
+    enabled: true
+    providers:
+      email:
+        enabled: true
+        smtp_host: "smtp.example.com"
+        smtp_port: 587
+        smtp_user: "alerts@example.com"
+        smtp_password: "password"  # Use environment variable in production
+        from_address: "alerts@example.com"
+        to_addresses:
+          - "devops@example.com"
+          - "trading@example.com"
+      slack:
+        enabled: true
+        webhook_url: "https://hooks.slack.com/services/..."
+        channel: "#trading-alerts"
+      pagerduty:
+        enabled: false
+        integration_key: ""
+  
+  # Metrics settings
+  metrics:
+    retention_days: 30
+    resolution: "1m"  # 1 minute resolution
+    storage: "prometheus"  # or "influxdb", "timescaledb", etc.
+    prometheus:
+      url: "http://localhost:9090"
+      job_name: "trading_system"
+    influxdb:
+      url: "http://localhost:8086"
+      database: "trading_metrics"
+      username: ""
+      password: ""
+
+# Compliance Settings
+compliance:
+  # Audit logging
+  audit_logging:
+    enabled: true
+    storage:
+      local:
+        enabled: true
+        directory: "/var/log/trading/audit"
+        retention_days: 365 * 5  # 5 years
+      database:
+        enabled: true
+        type: "postgresql"  # or "mysql", "sqlite", etc.
+        dsn: "postgresql://user:password@localhost/trading_compliance"
+      cloud_storage:
+        enabled: false
+        provider: "aws-s3"  # or "gcp-storage", "azure-blob", etc.
+        bucket: "trading-audit-logs"
+  
+  # Order tagging
+  order_tagging:
+    enabled: true
+    required_tags:
+      - "strategy"
+      - "trader"
+      - "account"
+    allowed_values:
+      strategy:
+        - "mean_reversion"
+        - "momentum"
+        - "arbitrage"
+        - "market_making"
+  
+  # Regulatory reporting
+  regulatory_reporting:
+    enabled: true
+    jurisdictions:
+      - region: "US"
+        agency: "SEC"
+        report_types:
+          - "CAT"  # Consolidated Audit Trail
+          - "OATS"  # Order Audit Trail System
+        filing_deadline: "T+1"  # Next business day
+      - region: "EU"
+        agency: "MiFID II"
+        report_types:
+          - "RTS 22"
+          - "RTS 23"
+        filing_deadline: "T+1"
+    
+    # Report generation settings
+    reports:
+      trade_confirmation:
+        enabled: true
+        format: "pdf"  # or "csv", "json"
+        delivery_method: "email"  # or "sftp", "api"
+        recipients:
+          - "compliance@example.com"
+          - "backoffice@example.com"
+      
+      transaction_report:
+        enabled: true
+        frequency: "daily"  # or "weekly", "monthly"
+        format: "csv"
+        delivery_method: "sftp"
+        sftp:
+          host: "sftp.regulator.example"
+          port: 22
+          username: "firm_12345"
+          directory: "/incoming"
+
+# Exchange Connectivity
+exchanges:
+  binance:
+    enabled: true
+    api_key: "${BINANCE_API_KEY}"  # Use environment variable
+    api_secret: "${BINANCE_API_SECRET}"  # Use environment variable
+    websocket:
+      enabled: true
+      endpoints:
+        - "wss://stream.binance.com:9443/ws"
+        - "wss://stream.binance.com:443/ws"
+    rest:
+      base_url: "https://api.binance.com"
+      timeout: 5  # seconds
+    rate_limits:
+      requests_per_minute: 1200
+      orders_per_second: 10
+      orders_per_day: 100000
+    
+    # Order types and settings
+    order_types:
+      market: true
+      limit: true
+      stop_loss: true
+      take_profit: true
+      stop_loss_limit: true
+      take_profit_limit: true
+      trailing_stop: false
+    
+    # Trading pairs
+    symbols:
+      - "BTCUSDT"
+      - "ETHUSDT"
+      - "BNBUSDT"
+      - "ADAUSDT"
+      - "DOGEUSDT"
+  
+  # Add more exchanges as needed
+  coinbase:
+    enabled: false
+    # ...
+
+# Risk Management
+risk:
+  # Position sizing
+  position_sizing:
+    max_position_size_usd: 100000
+    max_position_size_percent: 5.0  # % of portfolio
+    max_leverage: 10.0
+    max_drawdown_percent: 10.0
+  
+  # Order validation
+  order_validation:
+    price_validation: true
+    price_tolerance_percent: 5.0
+    size_validation: true
+    max_order_size_usd: 10000
+    min_order_size_usd: 10
+    max_orders_per_minute: 100
+  
+  # Circuit breakers
+  circuit_breakers:
+    enabled: true
+    max_daily_loss_percent: 5.0
+    max_position_risk: 0.5  # Value at Risk (VaR) threshold
+    volatility_break:
+      enabled: true
+      threshold: 3.0  # Standard deviations
+      lookback_period: 20  # candles
+    
+    # Automatic actions
+    actions:
+      - condition: "daily_loss > max_daily_loss"
+        action: "reduce_position"
+        params:
+          reduce_by: 0.5  # 50%
+      - condition: "volatility_break_triggered"
+        action: "cancel_all_orders"
+      - condition: "system_error_detected"
+        action: "disable_trading"
+
+# Strategy Configuration
+strategies:
+  mean_reversion:
+    enabled: true
+    symbols: ["BTCUSDT", "ETHUSDT"]
+    timeframe: "15m"
+    lookback_period: 100
+    zscore_threshold: 2.0
+    position_size: 1000  # USD
+    max_positions: 5
+    stop_loss_pct: 2.0
+    take_profit_pct: 3.0
+    
+    # Risk parameters
+    risk_per_trade: 1.0  # % of portfolio
+    max_drawdown: 10.0   # %
+    
+    # Time filters
+    trading_hours:
+      start: "09:30"
+      end: "16:00"
+      timezone: "America/New_York"
+    
+    # Performance metrics
+    performance:
+      sharpe_ratio: 1.5
+      max_drawdown: 10.0
+      win_rate: 55.0
+      profit_factor: 1.8
+  
+  momentum:
+    enabled: true
+    symbols: ["BTCUSDT", "ETHUSDT", "BNBUSDT"]
+    timeframe: "1h"
+    fast_ma: 9
+    slow_ma: 21
+    atr_period: 14
+    atr_multiplier: 2.0
+    
+    # Position sizing
+    risk_per_trade: 0.5  # % of portfolio
+    max_position_size: 5000  # USD
+    
+    # Filters
+    volume_threshold: 1000000  # 24h volume in USD
+    min_price: 1.0  # Min price to trade
+    
+    # Performance targets
+    performance:
+      sharpe_ratio: 2.0
+      max_drawdown: 8.0
+      win_rate: 60.0
+      profit_factor: 2.0
+
+# Backtesting Configuration
+backtesting:
+  enabled: true
+  data:
+    directory: "data/backtesting"
+    sources:
+      - name: "binance"
+        symbols: ["BTCUSDT", "ETHUSDT", "BNBUSDT"]
+        timeframes: ["1m", "5m", "15m", "1h", "4h", "1d"]
+        start_date: "2020-01-01"
+        end_date: "2023-01-01"
+      - name: "yahoo"
+        symbols: ["^GSPC", "^IXIC", "^DJI"]
+        timeframes: ["1d"]
+        start_date: "2010-01-01"
+        end_date: "2023-01-01"
+  
+  # Backtest settings
+  settings:
+    initial_capital: 100000  # USD
+    commission: 0.001  # 0.1%
+    slippage: 0.0005  # 0.05%
+    position_sizing: "fixed_fractional"  # or "fixed_size", "kelly"
+    risk_free_rate: 0.05  # 5% annual
+    benchmark: "BTCUSDT"  # For performance comparison
+  
+  # Optimization
+  optimization:
+    enabled: true
+    method: "grid"  # or "random", "bayesian"
+    parameters:
+      rsi_period: [7, 14, 21]
+      rsi_overbought: [70, 75, 80]
+      rsi_oversold: [20, 25, 30]
+      stop_loss: [1.0, 2.0, 3.0]
+      take_profit: [2.0, 3.0, 4.0]
+    metrics:
+      primary: "sharpe_ratio"
+      secondary: ["max_drawdown", "win_rate", "profit_factor"]
+
+# Logging Configuration
+logging:
+  level: "INFO"  # DEBUG, INFO, WARNING, ERROR, CRITICAL
+  file:
+    enabled: true
+    path: "logs/trading_system.log"
+    max_size: 100  # MB
+    backup_count: 10
+    format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+  
+  # Console logging
+  console:
+    enabled: true
+    format: "%(asctime)s - %(levelname)s - %(message)s"
+  
+  # External logging services
+  sentry:
+    enabled: true
+    dsn: "${SENTRY_DSN}"  # Use environment variable
+    environment: "production"
+    release: "1.0.0"
+  
+  # Structured logging (JSON)
+  structured:
+    enabled: true
+    format: "json"
+
+# Feature Flags
+features:
+  live_trading: false
+  paper_trading: true
+  backtesting: true
+  risk_checks: true
+  compliance_checks: true
+  performance_optimization: true
+  
+  # Experimental features
+  experimental:
+    reinforcement_learning: false
+    sentiment_analysis: false
+    alternative_data: false
+
+# API Configuration
+api:
+  enabled: true
+  host: "0.0.0.0"
+  port: 8000
+  debug: false
+  cors:
+    enabled: true
+    origins: ["*"]
+  
+  # Authentication
+  auth:
+    enabled: true
+    method: "jwt"  # or "api_key", "oauth"
+    jwt_secret: "${JWT_SECRET}"  # Use environment variable
+    token_expire_minutes: 1440  # 24 hours
+    password_policy:
+      min_length: 12
+      require_uppercase: true
+      require_lowercase: true
+      require_numbers: true
+      require_special_chars: true
+  
+  # Rate limiting
+  rate_limiting:
+    enabled: true
+    max_requests: 100
+    window: 60  # seconds
+  
+  # Endpoints
+  endpoints:
+    market_data: true
+    order_management: true
+    account_info: true
+    risk_metrics: true
+    strategy_control: true
+    system_status: true
+
+# System Settings
+system:
+  timezone: "UTC"
+  data_dir: "data"
+  cache_dir: "cache"
+  temp_dir: "tmp"
+  
+  # Process management
+  process:
+    max_restarts: 3
+    restart_delay: 5  # seconds
+    watchdog_interval: 60  # seconds
+  
+  # Maintenance
+  maintenance:
+    enabled: true
+    window: "02:00-04:00"  # Daily maintenance window
+    tasks:
+      - "cleanup_temp_files"
+      - "optimize_database"
+      - "backup_database"
+      - "update_market_data"
+  
+  # Notifications
+  notifications:
+    email:
+      enabled: true
+      smtp_host: "smtp.example.com"
+      smtp_port: 587
+      smtp_user: "noreply@example.com"
+      smtp_password: "${SMTP_PASSWORD}"  # Use environment variable
+      from_address: "trading-system@example.com"
+      to_addresses:
+        - "alerts@example.com"
+        - "devops@example.com"
+    
+    # Slack notifications
+    slack:
+      enabled: true
+      webhook_url: "${SLACK_WEBHOOK_URL}"  # Use environment variable
+      channel: "#trading-alerts"
+      username: "Trading System"
+    
+    # PagerDuty integration
+    pagerduty:
+      enabled: false
+      integration_key: "${PAGERDUTY_INTEGRATION_KEY}"  # Use environment variable
+      service_id: ""
+
+# Version Information
+version: "1.0.0"
+build_date: "2023-11-15"
+git_commit: "${GIT_COMMIT}"  # Will be replaced during build
+deployment_environment: "production"  # or "staging", "development"

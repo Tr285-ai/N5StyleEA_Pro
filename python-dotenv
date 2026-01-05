@@ -1,0 +1,7 @@
+from dotenv import load_dotenv
+import os
+
+load_dotenv()  # Load .env file
+
+api_key = os.getenv('Az_epYtI_14r4T2dR')
+# Access other variables as needed

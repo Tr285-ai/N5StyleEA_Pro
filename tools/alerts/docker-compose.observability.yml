@@ -1,0 +1,64 @@
+version: '3.8'
+
+services:
+  prometheus:
+    image: prom/prometheus:v2.48.1
+    container_name: prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+    volumes:
+      - ./tools/alerts/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./tools/alerts:/etc/prometheus/rules:ro
+    ports:
+      - '9090:9090'
+    networks: [obs]
+
+  alertmanager:
+    image: prom/alertmanager:v0.26.0
+    container_name: alertmanager
+    command:
+      - '--config.file=/etc/alertmanager/alertmanager.yml'
+    volumes:
+      - ./tools/alerts/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - ./secrets:/etc/alertmanager/secrets:ro
+    ports:
+      - '9093:9093'
+    networks: [obs]
+
+  grafana:
+    image: grafana/grafana:10.2.2
+    container_name: grafana
+    environment:
+      - PROMETHEUS_URL=http://prometheus:9090
+      - LOKI_URL=http://loki:3100
+    volumes:
+      - ./tools/alerts/grafana-provisioning/datasources:/etc/grafana/provisioning/datasources:ro
+      - ./tools/alerts/grafana-provisioning/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - ${GRAFANA_DASHBOARDS_PATH:-./ops/grafana/dashboards}:/var/lib/grafana/dashboards:ro
+    ports:
+      - '3000:3000'
+    depends_on: [prometheus, loki]
+    networks: [obs]
+
+  loki:
+    image: grafana/loki:2.9.2
+    container_name: loki
+    command: -config.file=/etc/loki/config.yml
+    volumes:
+      - ./tools/alerts/loki-config.yml:/etc/loki/config.yml:ro
+    ports:
+      - '3100:3100'
+    networks: [obs]
+
+  promtail:
+    image: grafana/promtail:2.9.2
+    container_name: promtail
+    command: -config.file=/etc/promtail/config.yml
+    volumes:
+      - ./tools/alerts/promtail-config.yml:/etc/promtail/config.yml:ro
+      - ./logs:/app/logs:ro
+    depends_on: [loki]
+    networks: [obs]
+
+networks:
+  obs: {}

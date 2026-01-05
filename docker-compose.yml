@@ -1,0 +1,28 @@
+version: '3.8'
+
+services:
+  trading-bot:
+    build: .
+    container_name: trading-bot
+    volumes:
+      - .:/app
+      - /app/logs
+      - /app/data
+      - /app/models
+    env_file:
+      - .env
+    restart: unless-stopped
+    networks:
+      - trading-network
+
+  # Add other services like Redis, databases, etc. here
+  # redis:
+  #   image: redis:alpine
+  #   ports:
+  #     - "6379:6379"
+  #   networks:
+  #     - trading-network
+
+networks:
+  trading-network:
+    driver: bridge

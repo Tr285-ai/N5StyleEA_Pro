@@ -1,0 +1,50 @@
+# config/strategies.yaml
+strategies:
+  MovingAverageCrossover:
+    enabled: true
+    symbols: ["EUR/USD", "GBP/USD"]
+    fast_window: 10
+    slow_window: 30
+    position_size: 1.0
+  
+  MomentumStrategy:
+    enabled: true
+    symbols: ["EUR/USD", "GBP/USD"]
+    rsi_period: 14
+    overbought: 70
+    oversold: 30
+    position_size: 1.0
+  
+  VolatilityBreakout:
+    enabled: true
+    symbols: ["EUR/USD", "GBP/USD"]
+    atr_period: 14
+    volatility_factor: 1.0
+    position_size: 1.0
+  
+  PairsTrading:
+    enabled: true
+    pairs: [["EUR/USD", "GBP/USD"]]
+    lookback: 20
+    entry_z: 2.0
+    exit_z: 0.0
+    position_size: 1.0
+
+  HybridStrategy:
+    enabled: true
+    voting_threshold: 0.6
+    strategy_weights:
+      MovingAverageCrossover: 1.0
+      MomentumStrategy: 0.8
+      VolatilityBreakout: 0.8
+    strategies:
+      - name: MovingAverageCrossover
+        params:
+          fast_window: 10
+          slow_window: 30
+      - name: MomentumStrategy
+        params:
+          rsi_period: 14
+      - name: VolatilityBreakout
+        params:
+          atr_period: 14

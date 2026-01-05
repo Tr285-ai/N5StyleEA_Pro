@@ -1,0 +1,73 @@
+# Configuration for N5StyleEA Pro
+
+# General settings
+general:
+  account_id: "12345678"
+  environment: "paper"  # or "live"
+  log_level: "INFO"    # DEBUG, INFO, WARNING, ERROR, CRITICAL
+
+# Strategy configuration
+strategies:
+  - name: "MovingAverageCrossover"
+    enabled: true
+    params:
+      fast_ma_period: 9
+      slow_ma_period: 21
+      risk_per_trade: 1.0
+      max_trades_per_day: 5
+
+# Risk management
+risk:
+  max_drawdown_pct: 10.0
+  max_position_size_pct: 10.0
+  max_risk_per_trade_pct: 1.0
+  daily_loss_limit_pct: 5.0
+
+# Broker settings
+broker:
+  name: "mt5"  # or "oanda", "ib", etc.
+  server: "MetaQuotes-Demo"
+  login: "your_login"
+  password: "your_password"
+  server: "MetaQuotes-Demo"
+
+# Data settings
+data:
+  timeframe: "M15"  # M1, M5, M15, H1, H4, D1, W1, MN1
+  symbols:
+    - "EURUSD"
+    - "GBPUSD"
+    - "USDJPY"
+    - "XAUUSD"
+  history_days: 30
+
+# Notifications
+notifications:
+  email:
+    enabled: false
+    smtp_server: "smtp.example.com"
+    smtp_port: 587
+    username: "your_email@example.com"
+    password: "your_password"
+    recipients:
+      - "your_email@example.com"
+  telegram:
+    enabled: false
+    bot_token: "your_bot_token"
+    chat_id: "your_chat_id"
+
+# Monitoring
+monitoring:
+  enabled: true
+  port: 8000
+  update_interval: 60  # seconds
+  metrics:
+    - "equity"
+    - "balance"
+    - "drawdown"
+    - "open_positions"
+    - "daily_pnl"
+
+  rule_files:
+  - tools/alerts/prometheus-rules.yml
+  - tools/alerts/prometheus-rules-slo.yml 

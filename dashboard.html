@@ -1,0 +1,140 @@
+<!-- web/dashboard/templates/dashboard.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ page_title }}</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body class="bg-gray-100">
+    <div class="min-h-screen">
+        <!-- Header -->
+        <header class="bg-white shadow">
+            <div class="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
+                <h1 class="text-3xl font-bold text-gray-900">Trading Dashboard</h1>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <main class="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
+            <!-- Portfolio Summary -->
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+                <div class="bg-white overflow-hidden shadow rounded-lg">
+                    <div class="px-4 py-5 sm:p-6">
+                        <dt class="text-sm font-medium text-gray-500 truncate">Total Portfolio Value</dt>
+                        <dd class="mt-1 text-3xl font-semibold text-gray-900">${{ "%.2f"|format(portfolio.total_value) }}</dd>
+                        <dd class="text-sm font-medium {{ 'text-green-600' if portfolio.daily_change >= 0 else 'text-red-600' }}">
+                            {{ "%.2f"|format(portfolio.daily_change * 100) }}% ({{ "${:,.2f}".format(portfolio.daily_pnl) }})
+                        </dd>
+                    </div>
+                </div>
+                <!-- Add more summary cards... -->
+            </div>
+
+            <!-- Positions Table -->
+            <div class="bg-white shadow overflow-hidden sm:rounded-lg mb-8">
+                <div class="px-4 py-5 sm:px-6 border-b border-gray-200">
+                    <h3 class="text-lg leading-6 font-medium text-gray-900">Open Positions</h3>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="min-w-full divide-y divide-gray-200">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Symbol</th>
+                                <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Size</th>
+                                <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Entry Price</th>
+                                <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Current Price</th>
+                                <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">P&L</th>
+                            </tr>
+                        </thead>
+                        <tbody class="bg-white divide-y divide-gray-200">
+                            {% for position in portfolio.positions %}
+                            <tr>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{{ position.symbol }}</td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-right">{{ "%.4f"|format(position.size) }}</td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-right">${{ "%.2f"|format(position.entry_price) }}</td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-right">${{ "%.2f"|format(position.current_price) }}</td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium {{ 'text-green-600' if (position.current_price - position.entry_price) >= 0 else 'text-red-600' }} text-right">
+                                    {{ "%.2f"|format((position.current_price / position.entry_price - 1) * 100) }}%
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Recent Trades -->
+            <div class="bg-white shadow overflow-hidden sm:rounded-lg">
+                <div class="px-4 py-5 sm:px-6 border-b border-gray-200">
+                    <h3 class="text-lg leading-6 font-medium text-gray-900">Recent Trades</h3>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="min-w-full divide-y divide-gray-200">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Time</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Symbol</th>
+                                <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Side</th>
+                                <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Size</th>
+                                <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Price</th>
+                                <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">P&L</th>
+                            </tr>
+                        </thead>
+                        <tbody class="bg-white divide-y divide-gray-200">
+                            {% for trade in trades %}
+                            <tr>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ trade.timestamp }}</td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{{ trade.symbol }}</td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-{{ 'green-600' if trade.side == 'buy' else 'red-600' }} font-medium text-right">{{ trade.side|upper }}</td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-right">{{ "%.4f"|format(trade.size) }}</td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-right">${{ "%.2f"|format(trade.price) }}</td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium {{ 'text-green-600' if trade.pnl >= 0 else 'text-red-600' }} text-right">
+                                    {{ "${:,.2f}".format(trade.pnl) }}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        // Add interactive charts and real-time updates here
+        document.addEventListener('DOMContentLoaded', function() {
+            // Initialize charts
+            const ctx = document.createElement('canvas');
+            document.querySelector('main').prepend(ctx);
+            
+            new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'],
+                    datasets: [{
+                        label: 'Portfolio Value',
+                        data: [12000, 19000, 3000, 5000, 2000, 3000],
+                        borderColor: 'rgb(75, 192, 192)',
+                        tension: 0.1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: {
+                            position: 'top',
+                        },
+                        title: {
+                            display: true,
+                            text: 'Portfolio Performance'
+                        }
+                    }
+                }
+            });
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,41 @@
+# mkdocs.yml
+site_name: N5StyleEA Documentation
+site_url: https://n5styleea.com/docs
+repo_url: https://github.com/your-org/n5styleea
+edit_uri: edit/main/docs/
+
+theme:
+  name: material
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - toc.integrate
+    - navigation.top
+
+markdown_extensions:
+  - toc:
+      permalink: true
+  - pymdownx.highlight
+  - pymdownx.superfences
+  - pymdownx.details
+
+nav:
+  - Home: index.md
+  - Getting Started:
+      - Installation: getting-started/installation.md
+      - Quick Start: getting-started/quickstart.md
+  - User Guide:
+      - Configuration: user-guide/configuration.md
+      - Strategies: user-guide/strategies.md
+  - API Reference:
+      - Trading: api/trading.md
+      - Data Management: api/data-management.md
+  - Development:
+      - Contributing: development/contributing.md
+      - Testing: development/testing.md
+
+extra_css:
+  - css/extra.css
+
+extra_javascript:
+  - js/extra.js

@@ -1,0 +1,39 @@
+if __name__ == "__main__":
+    import asyncio
+    
+    async def main():
+        # Initialize the trading system
+        config = {
+            'initial_capital': 1_000_000,
+            'exchanges': [{'id': 'binance', 'type': 'spot'}],
+            'monitoring': {'alert_level': 'info'}
+        }
+        system = TradingSystem(config)
+        await system.initialize()
+        
+        try:
+            # Example: Run a stress test
+            scenario = {
+                'name': 'Market Crash',
+                'shock_type': 'price',
+                'shock_size': -0.2,  # 20% drop
+                'assets': ['AAPL', 'MSFT', 'GOOGL']
+            }
+            stress_test_result = await system.risk_manager.stress_test_portfolio(scenario)
+            print("Stress Test Result:", stress_test_result)
+            
+            # Example: Execute TWAP order
+            twap_result = await system.execute_strategy({
+                'name': 'TWAP Example',
+                'symbol': 'AAPL',
+                'quantity': 100,
+                'order_type': 'TWAP',
+                'duration': 300,  # 5 minutes
+                'slices': 10
+            })
+            print("TWAP Execution Result:", twap_result)
+            
+        finally:
+            await system.shutdown()
+    
+    asyncio.run(main())

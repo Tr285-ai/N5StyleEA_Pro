@@ -1,0 +1,40 @@
+{
+    "training": {
+        "data_dir": "data",
+        "models_dir": "models",
+        "backup_dir": "backups",
+        "min_samples": 1000,
+        "test_size": 0.2,
+        "retrain_interval": 86400,
+        "feature_columns": [
+            "rsi", "macd", "bollinger_upper", "bollinger_lower",
+            "atr", "volume", "price_change", "volatility"
+        ],
+        "target_column": "target",
+        "lookback_window": 14,
+        "prediction_horizon": 5,
+        "data_retention_days": 30
+    },
+    "models": [
+        {
+            "id": "random_forest",
+            "type": "random_forest",
+            "params": {
+                "n_estimators": 100,
+                "max_depth": 5,
+                "random_state": 42,
+                "n_jobs": -1
+            }
+        },
+        {
+            "id": "gradient_boosting",
+            "type": "gradient_boosting",
+            "params": {
+                "n_estimators": 100,
+                "learning_rate": 0.1,
+                "max_depth": 3,
+                "random_state": 42
+            }
+        }
+    ]
+}

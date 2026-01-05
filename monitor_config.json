@@ -1,0 +1,45 @@
+{
+    "monitoring": {
+        "enabled": true,
+        "update_interval": 60,
+        "max_cpu_percent": 80.0,
+        "max_memory_percent": 80.0,
+        "max_disk_percent": 90.0,
+        "max_temperature": 80.0
+    },
+    "alerts": {
+        "enabled": true,
+        "email": {
+            "enabled": false,
+            "smtp_server": "smtp.example.com",
+            "smtp_port": 587,
+            "username": "your_email@example.com",
+            "password": "your_password",
+            "from_email": "noreply@example.com",
+            "to_emails": [
+                "your_email@example.com"
+            ],
+            "use_tls": true
+        },
+        "telegram": {
+            "enabled": false,
+            "bot_token": "your_bot_token_here",
+            "chat_id": "your_chat_id_here"
+        },
+        "slack": {
+            "enabled": false,
+            "webhook_url": "your_slack_webhook_url_here",
+            "channel": "#alerts"
+        }
+    },
+    "logging": {
+        "level": "INFO",
+        "file": "logs/system_monitor.log",
+        "max_size_mb": 10,
+        "backup_count": 5
+    },
+    "system": {
+        "check_interval": 60,
+        "max_log_age_days": 7
+    }
+}

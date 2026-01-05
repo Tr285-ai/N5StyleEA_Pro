@@ -1,0 +1,94 @@
+{
+    "enabled": true,
+    "git": {
+        "repo": "https://github.com/yourusername/N5StyleEA_Pro.git",
+        "branch": "main",
+        "check_interval_hours": 24
+    },
+    "update": {
+        "check_interval": 3600,
+        "auto_download": true,
+        "backup_before_update": true,
+        "changelog_url": "https://api.github.com/repos/yourusername/N5StyleEA_Pro/releases/latest"
+    },
+    "backup": {
+        "enabled": true,
+        "directory": "backups",
+        "keep_last": 5,
+        "exclude": [
+            "*.pyc",
+            "__pycache__",
+            ".git",
+            "logs/*",
+            "data/*.csv",
+            "*.log"
+        ]
+    },
+    "testing": {
+        "enabled": true,
+        "test_command": "python -m pytest tests/",
+        "timeout_seconds": 300
+    },
+    "notifications": {
+        "enabled": true,
+        "on_start": true,
+        "on_success": true,
+        "on_failure": true,
+        "on_rollback": true,
+        "on_update_available": true,
+        "on_update_complete": true,
+        "on_error": true
+    },
+    "rollback": {
+        "enabled": true,
+        "max_attempts": 3
+    },
+    "schedule": {
+        "enabled": true,
+        "time": "03:00",
+        "timezone": "UTC"
+    },
+    "sources": [
+        {
+            "name": "github",
+            "type": "github",
+            "repo": "yourusername/N5StyleEA_Pro",
+            "branch": "main",
+            "asset_pattern": "N5StyleEA_Pro_*.zip"
+        }
+    ],
+    "files": {
+        "include": [
+            "app/**/*",
+            "config/*.json",
+            "requirements.txt",
+            "README.md",
+            "*.py"
+        ],
+        "exclude": [
+            "**/__pycache__/*",
+            "**/*.pyc",
+            "**/*.log",
+            "**/.DS_Store",
+            "**/venv/**",
+            "**/env/**",
+            "**/node_modules/**"
+        ]
+    },
+    "version": {
+        "current": "15.3.0",
+        "check_url": "https://api.github.com/repos/yourusername/N5StyleEA_Pro/releases/latest"
+    },
+    "verification": {
+        "verify_checksum": true,
+        "verify_signature": false,
+        "public_key": ""
+    },
+    "post_update": {
+        "restart_required": true,
+        "commands": [
+            "pip install -r requirements.txt --upgrade",
+            "python -m pip install --upgrade pip"
+        ]
+    }
+}

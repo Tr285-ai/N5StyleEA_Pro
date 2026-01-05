@@ -1,0 +1,56 @@
+{
+  "__inputs": [
+    {
+      "name": "DS_PROMETHEUS",
+      "label": "Prometheus",
+      "type": "datasource",
+      "pluginId": "prometheus"
+    }
+    ],
+  "__requires": [
+    {"type":"panel","id":"timeseries","name":"Time series"},
+    {"type":"datasource","id":"prometheus","name":"Prometheus"}
+  ],
+  "title": "Trading Observability",
+  "uid": "trading-observability",
+  "schemaVersion": 37,
+  "version": 1,
+  "panels": [
+    {
+      "type": "timeseries",
+      "title": "WS errors (rate 5m)",
+      "datasource": "${DS_PROMETHEUS}",
+      "targets": [
+        {"refId":"A","expr":"sum(rate(n5_counter_ws_errors_total[5m]))","legendFormat":"ws_errors"}
+      ],
+      "gridPos": {"h":8,"w":12,"x":0,"y":0}
+    },
+    {
+      "type": "timeseries",
+      "title": "WS reconnects (rate 5m)",
+      "datasource": "${DS_PROMETHEUS}",
+      "targets": [
+        {"refId":"A","expr":"sum(rate(n5_counter_ws_reconnects_total[5m]))","legendFormat":"ws_reconnects"}
+      ],
+      "gridPos": {"h":8,"w":12,"x":12,"y":0}
+    },
+    {
+      "type": "timeseries",
+      "title": "Orders filled (rate 5m)",
+      "datasource": "${DS_PROMETHEUS}",
+      "targets": [
+        {"refId":"A","expr":"sum(rate(n5_counter_orders_filled_total[5m]))","legendFormat":"orders_filled"}
+      ],
+      "gridPos": {"h":8,"w":12,"x":0,"y":8}
+    },
+    {
+      "type": "timeseries",
+      "title": "Orders failed (rate 5m)",
+      "datasource": "${DS_PROMETHEUS}",
+      "targets": [
+        {"refId":"A","expr":"sum(rate(n5_counter_orders_failed_total[5m]))","legendFormat":"orders_failed"}
+      ],
+      "gridPos": {"h":8,"w":12,"x":12,"y":8}
+    }
+  ]
+}

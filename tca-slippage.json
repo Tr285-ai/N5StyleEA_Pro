@@ -1,0 +1,46 @@
+{
+  "__inputs": [
+    {
+      "name": "DS_LOKI",
+      "label": "Loki",
+      "type": "datasource",
+      "pluginId": "loki"
+    }
+  ],
+  "__requires": [
+    {"type":"panel","id":"timeseries","name":"Time series"},
+    {"type":"datasource","id":"loki","name":"Loki"}
+  ],
+  "title": "TCA Slippage",
+  "uid": "tca-slippage",
+  "schemaVersion": 37,
+  "version": 1,
+  "panels": [
+    {
+      "type":"timeseries",
+      "title":"P95 slippage_bps (5m)",
+      "datasource":"${DS_LOKI}",
+      "targets":[
+        {
+          "refId":"A",
+          "expr":"quantile_over_time(0.95, {job=\"tca\"} | json | unwrap slippage_bps [5m])",
+          "queryType":"range"
+        }
+      ],
+      "gridPos":{"h":8,"w":12,"x":0,"y":0}
+    },
+    {
+      "type":"timeseries",
+      "title":"Mean slippage_bps (5m)",
+      "datasource":"${DS_LOKI}",
+      "targets":[
+        {
+          "refId":"A",
+          "expr":"avg_over_time({job=\"tca\"} | json | unwrap slippage_bps [5m])",
+          "queryType":"range"
+        }
+      ],
+      "gridPos":{"h":8,"w":12,"x":12,"y":0}
+    }
+  ]
+}

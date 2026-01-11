@@ -6,7 +6,6 @@ import shutil
 from pathlib import Path
 from typing import Generator, Dict, Any
 import asyncio
-from fastapi.testclient import TestClient
 import sys
 import os
 

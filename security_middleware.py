@@ -1,4 +1,4 @@
-from functools import wraps
+﻿from functools import wraps
 from flask import request, jsonify
 import time
 import re
@@ -144,7 +144,7 @@ def validate_input(
     input_data: Dict[str, Any], 
     rules: Dict[str, Dict[str, Any]]
 ) -> Optional[Dict[str, str]]:
-    """Validate input data against a set of rules.
+    r"""Validate input data against a set of rules.
     
     Args:
         input_data: Dictionary of input data to validate

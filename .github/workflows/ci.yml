@@ -24,7 +24,7 @@ jobs:
       - name: Install minimal test dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install pytest pytest-asyncio pytest-cov pandas numpy jsonschema
+          pip install pytest pytest-asyncio pytest-cov pandas numpy jsonschema fastapi uvicorn httpx
       - name: Run integration tests
         env:
           PAPER_TRADING: 'true'

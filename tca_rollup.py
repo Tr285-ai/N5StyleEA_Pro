@@ -81,24 +81,24 @@ def load_tca_jsonl(path: str) -> pd.DataFrame:
     # Filter only order events with symbol
     if 'event' in df.columns:
         df = df[df['event'].isin(['order','algo_order'])]
-    df = df[df.get('symbol').notna()]
+    if 'symbol' in df.columns:
+        df = df[df['symbol'].notna()]
+    else:
+        # No symbol column => nothing to roll up
+        return pd.DataFrame(columns=df.columns)
     return df
 
 
 def rollup_tca(df: pd.DataFrame) -> pd.DataFrame:
     if df.empty:
         return pd.DataFrame(columns=['date','symbol','exchange','trades','slippage_bps_avg','slippage_bps_p95','slippage_bps_max','slippage_cost_total'])
-    # compute slippage cost in quote currency
+    # compute slippage cost as absolute slippage percent per trade (sum of |bps|/100)
     def slip_cost(row) -> float:
-        ap = _safe_float(row.get('arrival_price')) or 0.0
-        fp = _safe_float(row.get('fill_price')) or ap
-        amt = _safe_float(row.get('amount')) or 0.0
-        side = str(row.get('side','')).lower()
-        if side == 'buy':
-            return max(0.0, fp - ap) * amt
-        if side == 'sell':
-            return max(0.0, ap - fp) * amt
-        return 0.0
+        try:
+            bps = float(row.get('slippage_bps'))
+        except Exception:
+            bps = 0.0
+        return abs(bps) / 100.0
     df = df.copy()
     df['slippage_cost'] = df.apply(slip_cost, axis=1)
     # ensure exchange column

@@ -61,8 +61,8 @@ jobs:
       - name: Run smoke tests (WS and shutdown)
         run: |
           pytest --version
-          pytest -q --override-ini "addopts=" tests/integration/test_ws_and_event.py::test_ws_reconnect_counters_on_watch_error
-          pytest -q --override-ini "addopts=" tests/integration/test_ws_and_event.py::test_event_loop_cancellation_triggers_ws_shutdown
+          pytest -q -c /dev/null tests/integration/test_ws_and_event.py::test_ws_reconnect_counters_on_watch_error
+          pytest -q -c /dev/null tests/integration/test_ws_and_event.py::test_event_loop_cancellation_triggers_ws_shutdown
 
   snapshot-logs:
     runs-on: ubuntu-latest

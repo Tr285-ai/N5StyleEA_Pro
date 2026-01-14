@@ -1,0 +1,4 @@
+mkdir scripts
+chmod +x scripts/monitor_performance.py
+pip install psutil pandas
+python scripts/monitor_performance.py --duration 300 --interval 5

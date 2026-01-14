@@ -53,6 +53,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+          cache: 'pip'
       - name: Install test dependencies
         run: |
           python -m pip install --upgrade pip
@@ -75,6 +76,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+          cache: 'pip'
       - name: Install test dependencies
         run: |
           python -m pip install --upgrade pip
@@ -90,6 +92,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+          cache: 'pip'
       - name: Install test dependencies
         run: |
           python -m pip install --upgrade pip

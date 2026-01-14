@@ -7,8 +7,9 @@ services:
     command:
       - '--config.file=/etc/prometheus/prometheus.yml'
     volumes:
-      - ./tools/alerts/prometheus.yml:/etc/prometheus/prometheus.yml:ro
-      - ./tools/alerts:/etc/prometheus/rules:ro
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./prometheus-rules.yml:/etc/prometheus/rules/prometheus-rules.yml:ro
+      - ./prometheus-rules-slo.yml:/etc/prometheus/rules/prometheus-rules-slo.yml:ro
     ports:
       - '9090:9090'
     networks: [obs]
@@ -19,7 +20,7 @@ services:
     command:
       - '--config.file=/etc/alertmanager/alertmanager.yml'
     volumes:
-      - ./tools/alerts/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - ./alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
       - ./secrets:/etc/alertmanager/secrets:ro
     ports:
       - '9093:9093'
@@ -32,8 +33,8 @@ services:
       - PROMETHEUS_URL=http://prometheus:9090
       - LOKI_URL=http://loki:3100
     volumes:
-      - ./tools/alerts/grafana-provisioning/datasources:/etc/grafana/provisioning/datasources:ro
-      - ./tools/alerts/grafana-provisioning/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - ./grafana-provisioning/datasources:/etc/grafana/provisioning/datasources:ro
+      - ./grafana-provisioning/dashboards:/etc/grafana/provisioning/dashboards:ro
       - ${GRAFANA_DASHBOARDS_PATH:-./ops/grafana/dashboards}:/var/lib/grafana/dashboards:ro
     ports:
       - '3000:3000'
@@ -45,7 +46,7 @@ services:
     container_name: loki
     command: -config.file=/etc/loki/config.yml
     volumes:
-      - ./tools/alerts/loki-config.yml:/etc/loki/config.yml:ro
+      - ./loki-config.yml:/etc/loki/config.yml:ro
     ports:
       - '3100:3100'
     networks: [obs]
@@ -55,8 +56,8 @@ services:
     container_name: promtail
     command: -config.file=/etc/promtail/config.yml
     volumes:
-      - ./tools/alerts/promtail-config.yml:/etc/promtail/config.yml:ro
-      - ./logs:/app/logs:ro
+      - ./promtail-config.yml:/etc/promtail/config.yml:ro
+      - ${REPO_ROOT:-..}/logs:/app/logs:ro
     depends_on: [loki]
     networks: [obs]
 

@@ -1,0 +1,12 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../../
+  - ../../ingress-staging.yaml
+  - ../../hpa-staging.yaml
+  - ../../cert-manager/issuer.yaml
+  - ../../cert-manager/certificate-staging.yaml
+patchesStrategicMerge:
+  - deployment-replicas.patch.yaml
+commonLabels:
+  env: staging

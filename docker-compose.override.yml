@@ -1,0 +1,14 @@
+version: '3.8'
+
+services:
+  trading-bot:
+    environment:
+      ORDERS_DB_BACKEND: pg
+      ORDERS_DB_URL: postgresql+psycopg2://postgres:postgres@postgres:5432/n5trading
+      DB_MIGRATE_ON_START: '1'
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: always
+    networks:
+      - trading-network

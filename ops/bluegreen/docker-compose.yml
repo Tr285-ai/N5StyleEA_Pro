@@ -1,0 +1,66 @@
+services:
+  app_blue:
+    build:
+      context: ../..
+      dockerfile: Dockerfile.prod
+    image: n5styleea_app:blue
+    environment:
+      - ENABLE_METRICS=1
+      - PORT=8000
+      - ADMIN_TOKEN_FILE=/run/secrets/admin_token
+      - UVLOOP_ENABLE=1
+      - ALLOWED_ORIGINS=http://localhost:3000
+      - ORDERS_DB_BACKEND=pg
+      - ORDERS_DB_URL=postgresql+psycopg2://postgres:postgres@postgres:5432/n5trading
+      - DB_MIGRATE_ON_START=1
+    volumes:
+      - ../prometheus/secrets/admin_token:/run/secrets/admin_token:ro
+    depends_on:
+      - postgres
+    restart: always
+
+  app_green:
+    build:
+      context: ../..
+      dockerfile: Dockerfile.prod
+    image: n5styleea_app:green
+    environment:
+      - ENABLE_METRICS=1
+      - PORT=8000
+      - ADMIN_TOKEN_FILE=/run/secrets/admin_token
+      - UVLOOP_ENABLE=1
+      - ALLOWED_ORIGINS=http://localhost:3000
+      - ORDERS_DB_BACKEND=pg
+      - ORDERS_DB_URL=postgresql+psycopg2://postgres:postgres@postgres:5432/n5trading
+      - DB_MIGRATE_ON_START=1
+    volumes:
+      - ../prometheus/secrets/admin_token:/run/secrets/admin_token:ro
+    depends_on:
+      - postgres
+    restart: always
+
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - app_blue
+      - app_green
+    restart: always
+
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: n5trading
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: always

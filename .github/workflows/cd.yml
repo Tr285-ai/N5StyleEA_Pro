@@ -1,0 +1,216 @@
+name: CD Deploy
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  packages: read
+
+jobs:
+  deploy-staging:
+    name: Deploy to Staging
+    if: ${{ secrets.KUBE_CONFIG_STAGING_B64 != '' }}
+    runs-on: ubuntu-latest
+    env:
+      DOCKER_IMAGE: ghcr.io/${{ github.repository }}:${{ github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up kubectl
+        uses: azure/setup-kubectl@v4
+        with:
+          version: 'v1.29.0'
+      - name: Login to GHCR (for image availability check)
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Ensure image is available in GHCR
+        run: |
+          for i in {1..30}; do
+            if docker pull "$DOCKER_IMAGE"; then
+              echo "Image available: $DOCKER_IMAGE"
+              exit 0
+            fi
+            echo "Image not yet available, retry $i/30..."
+            sleep 10
+          done
+          echo "Image did not become available in time" >&2
+          exit 1
+      - name: Write kubeconfig (staging)
+        env:
+          KUBE_CONFIG_B64: ${{ secrets.KUBE_CONFIG_STAGING_B64 }}
+        run: |
+          echo "$KUBE_CONFIG_B64" | base64 -d > "$GITHUB_WORKSPACE/kubeconfig-staging"
+      - name: Deploy staging overlay and set image
+        env:
+          KUBECONFIG: ${{ github.workspace }}/kubeconfig-staging
+          NS: ${{ vars.K8S_NAMESPACE_STAGING }}
+        run: |
+          set -euo pipefail
+          NS="${NS:-staging}"
+          kubectl -n "$NS" apply -k ops/k8s/overlays/staging
+          kubectl -n "$NS" set image deploy/trading-bot app="$DOCKER_IMAGE"
+          kubectl rollout status deploy/trading-bot -n "$NS" --timeout=180s
+
+  deploy-prod:
+    name: Deploy to Prod
+    needs: deploy-staging
+    if: ${{ secrets.KUBE_CONFIG_PROD_B64 != '' }}
+    runs-on: ubuntu-latest
+    env:
+      DOCKER_IMAGE: ghcr.io/${{ github.repository }}:${{ github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up kubectl
+        uses: azure/setup-kubectl@v4
+        with:
+          version: 'v1.29.0'
+      - name: Login to GHCR (for image availability check)
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Ensure image is available in GHCR
+        run: |
+          for i in {1..30}; do
+            if docker pull "$DOCKER_IMAGE"; then
+              echo "Image available: $DOCKER_IMAGE"
+              exit 0
+            fi
+            echo "Image not yet available, retry $i/30..."
+            sleep 10
+          done
+          echo "Image did not become available in time" >&2
+          exit 1
+      - name: Write kubeconfig (prod)
+        env:
+          KUBE_CONFIG_B64: ${{ secrets.KUBE_CONFIG_PROD_B64 }}
+        run: |
+          echo "$KUBE_CONFIG_B64" | base64 -d > "$GITHUB_WORKSPACE/kubeconfig-prod"
+      - name: Deploy prod overlay (Let’s Encrypt or stable) and set image
+        env:
+          KUBECONFIG: ${{ github.workspace }}/kubeconfig-prod
+          NS: ${{ vars.K8S_NAMESPACE_PROD }}
+          LETSENCRYPT: ${{ vars.ENABLE_LETSENCRYPT }}
+          LETS_EMAIL: ${{ vars.LETSENCRYPT_EMAIL }}
+        run: |
+          set -euo pipefail
+          NS="${NS:-prod}"
+          if [ "${LETSENCRYPT,,}" = "1" ] || [ "${LETSENCRYPT,,}" = "true" ]; then
+            sed -e "s/letsencrypt@example.com/${LETS_EMAIL}/" ops/k8s/cert-manager/clusterissuer-letsencrypt-prod.yaml | kubectl apply -f -
+            kubectl -n "$NS" apply -k ops/k8s/overlays/prod-letsencrypt
+          else
+            kubectl -n "$NS" apply -k ops/k8s/overlays/prod-stable
+          fi
+          # Record previous image for rollback
+          PREV_IMAGE=$(kubectl -n "$NS" get deploy/trading-bot -o jsonpath='{.spec.template.spec.containers[?(@.name=="app")].image}' || true)
+          echo "Previous image: $PREV_IMAGE"
+          echo "PREV_IMAGE=$PREV_IMAGE" >> "$GITHUB_ENV"
+          kubectl -n "$NS" set image deploy/trading-bot app="$DOCKER_IMAGE"
+          kubectl rollout status deploy/trading-bot -n "$NS" --timeout=300s
+
+      - name: "Smoke check prod: /health and /health/ready"
+        env:
+          KUBECONFIG: ${{ github.workspace }}/kubeconfig-prod
+          NS: ${{ vars.K8S_NAMESPACE_PROD }}
+        run: |
+          set -euo pipefail
+          NS="${NS:-prod}"
+          # Run ephemeral pod inside cluster to curl the service endpoints
+          kubectl -n "$NS" run smoke --image=busybox:1.36 --restart=Never --rm -i -- sh -lc "wget -qO- http://trading-bot/health >/dev/null && wget -qO- http://trading-bot/health/ready | grep -q '\"ready\"[[:space:]]*:[[:space:]]*true'"
+
+      - name: "Smoke check prod: /metrics with temporary token"
+        env:
+          KUBECONFIG: ${{ github.workspace }}/kubeconfig-prod
+          NS: ${{ vars.K8S_NAMESPACE_PROD }}
+          METRICS_BEARER_TOKEN: ${{ secrets.METRICS_BEARER_TOKEN }}
+        run: |
+          set -euo pipefail
+          NS="${NS:-prod}"
+          if [ -n "${METRICS_BEARER_TOKEN:-}" ]; then
+            TMP_TOKEN="$METRICS_BEARER_TOKEN"
+          else
+            TMP_TOKEN=$(head -c 18 /dev/urandom | base64 | tr -dc 'A-Za-z0-9' | head -c 24)
+          fi
+          kubectl -n "$NS" run smoke-metrics --image=curlimages/curl:8.5.0 --restart=Never --rm -i --env=TMP_TOKEN="$TMP_TOKEN" -- sh -lc 'curl -fsSL -H "Authorization: Bearer $TMP_TOKEN" http://trading-bot/metrics | head -n 5 >/dev/null'
+
+      - name: Rollback on failure
+        if: ${{ failure() }}
+        env:
+          KUBECONFIG: ${{ github.workspace }}/kubeconfig-prod
+          NS: ${{ vars.K8S_NAMESPACE_PROD }}
+        run: |
+          set -euo pipefail
+          NS="${NS:-prod}"
+          echo "Deployment failed; attempting rollback..."
+          if ! kubectl -n "$NS" rollout undo deploy/trading-bot; then
+            echo "rollout undo failed; trying to restore previous image if available"
+            if [ -n "${PREV_IMAGE:-}" ]; then
+              kubectl -n "$NS" set image deploy/trading-bot app="$PREV_IMAGE" || true
+            fi
+          fi
+          kubectl -n "$NS" rollout status deploy/trading-bot --timeout=180s || true
+          kubectl -n "$NS" get pods -o wide || true
+
+      - name: Collect deploy diagnostics (on failure)
+        if: ${{ failure() }}
+        env:
+          KUBECONFIG: ${{ github.workspace }}/kubeconfig-prod
+          NS: ${{ vars.K8S_NAMESPACE_PROD }}
+        run: |
+          set -euo pipefail
+          NS="${NS:-prod}"
+          ART="deploy-artifacts"
+          mkdir -p "$ART"
+          kubectl -n "$NS" describe deploy trading-bot > "$ART/deploy_trading-bot.txt" || true
+          kubectl -n "$NS" get pods -l app=trading-bot -o wide > "$ART/pods.txt" || true
+          kubectl -n "$NS" describe pods -l app=trading-bot > "$ART/pods_describe.txt" || true
+          kubectl -n "$NS" get rs -l app=trading-bot -o wide > "$ART/replicasets.txt" || true
+          kubectl -n "$NS" describe rs -l app=trading-bot > "$ART/replicasets_describe.txt" || true
+          kubectl -n "$NS" get events --sort-by=.lastTimestamp > "$ART/events.txt" || true
+          for p in $(kubectl -n "$NS" get pods -l app=trading-bot -o name); do
+            kubectl -n "$NS" logs "$p" --all-containers --tail=500 > "$ART/${p##*/}.log" || true
+          done
+
+      - name: Upload deploy diagnostics (on failure)
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: deploy-diagnostics
+          path: deploy-artifacts
+
+      - name: Notify rollback (Slack/Teams)
+        if: ${{ failure() }}
+        env:
+          KUBECONFIG: ${{ github.workspace }}/kubeconfig-prod
+          NS: ${{ vars.K8S_NAMESPACE_PROD }}
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          TEAMS_WEBHOOK_URL: ${{ secrets.TEAMS_WEBHOOK_URL }}
+        run: |
+          set -euo pipefail
+          NS="${NS:-prod}"
+          SHORT_SHA=$(echo "${GITHUB_SHA}" | cut -c1-8)
+          MSG="Rollback executed (or attempted) for ${GITHUB_REPOSITORY}@${SHORT_SHA} in namespace ${NS}. Previous image: ${PREV_IMAGE:-unknown}. New image: ${DOCKER_IMAGE}. See 'deploy-diagnostics' artifact for details."
+          if [ -n "${SLACK_WEBHOOK_URL:-}" ]; then
+            curl -X POST -H 'Content-type: application/json' --data "{\"text\":\"$MSG\"}" "$SLACK_WEBHOOK_URL" || true
+          fi
+          if [ -n "${TEAMS_WEBHOOK_URL:-}" ]; then
+            curl -X POST -H 'Content-Type: application/json' -d "{\"text\":\"$MSG\"}" "$TEAMS_WEBHOOK_URL" || true
+          fi
+      - name: Protect /metrics with basic auth and apply metrics Ingress (optional)
+        if: ${{ (vars.ENABLE_METRICS_INGRESS == '1' || vars.ENABLE_METRICS_INGRESS == 'true') && secrets.METRICS_HTPASSWD != '' }}
+        env:
+          KUBECONFIG: ${{ github.workspace }}/kubeconfig-prod
+          NS: ${{ vars.K8S_NAMESPACE_PROD }}
+          HTPASSWD: ${{ secrets.METRICS_HTPASSWD }}
+        run: |
+          set -euo pipefail
+          NS="${NS:-prod}"
+          kubectl -n "$NS" create secret generic metrics-basic-auth --from-literal=auth="$HTPASSWD" --dry-run=client -o yaml | kubectl apply -f -
+          kubectl -n "$NS" apply -k ops/k8s/overlays/prod-metrics

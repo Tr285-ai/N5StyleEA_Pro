@@ -1,0 +1,12 @@
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: trading-bot-cert
+spec:
+  secretName: trading-bot-tls
+  commonName: n5trading.local
+  dnsNames:
+  - n5trading.local
+  issuerRef:
+    name: selfsigned-issuer
+    kind: Issuer

@@ -6,6 +6,10 @@ on:
   pull_request:
     branches: [ main, develop ]
 
+permissions:
+  contents: read
+  packages: write
+
 jobs:
   test:
     strategy:
@@ -24,12 +28,352 @@ jobs:
       - name: Install minimal test dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install pytest pytest-asyncio pytest-cov pandas numpy jsonschema fastapi uvicorn httpx
-      - name: Run integration tests
+          pip install pytest pytest-asyncio pytest-cov pandas numpy jsonschema fastapi uvicorn httpx requests ruff mypy black flake8 bandit pydantic pyyaml opentelemetry-api opentelemetry-sdk opentelemetry-exporter-otlp pip-audit cyclonedx-bom
+      - name: Lint (ruff)
+        continue-on-error: true
+        run: |
+          ruff check executor.py orders_db.py risk risk_manager_basic.py tools/validate_config.py tests/unit tests/integration
+      - name: Type check (mypy)
+        continue-on-error: true
+        run: |
+          mypy executor.py orders_db.py risk risk_manager_basic.py tools/validate_config.py tests/unit tests/integration --ignore-missing-imports --install-types --non-interactive --explicit-package-bases --follow-imports=skip --disable-error-code=var-annotated
+      - name: Format check (black)
+        continue-on-error: true
+        run: |
+          black --check executor.py orders_db.py risk risk_manager_basic.py tools/validate_config.py tests/unit tests/integration
+      - name: Lint (flake8)
+        continue-on-error: true
+        run: |
+          flake8 executor.py orders_db.py risk risk_manager_basic.py tools/validate_config.py --max-line-length=88 --extend-ignore=E203,E501
+      - name: Security scan (bandit)
+        continue-on-error: true
+        run: |
+          bandit --exit-zero -q -r executor.py orders_db.py risk risk_manager_basic.py tools/validate_config.py -s B110,B112,B311,B608
+      - name: Vulnerability scan (pip-audit)
+        continue-on-error: true
+        run: |
+          pip-audit -r requirements.txt || true
+      - name: Validate config schema
+        run: |
+          python tools/validate_config.py config/trading_config.yaml
+      - name: Run unit tests
+        run: |
+          pytest -q tests/unit
+      - name: Run integration tests (with coverage threshold)
         env:
           PAPER_TRADING: 'true'
           ENABLE_METRICS: '1'
           USE_EVENT_DRIVEN: '1'
           USE_WS: '0'
         run: |
-          pytest -q tests/integration
+          pytest -q tests/integration --cov-fail-under=80
+
+      - name: Generate CycloneDX SBOM
+        run: |
+          cyclonedx-bom -o sbom.json -F || cyclonedx-bom -o sbom.json
+
+      - name: Upload SBOM (always)
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: cyclonedx-sbom
+          path: sbom.json
+
+      - name: Upload test artifacts (always)
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: tests-and-dashboards
+          path: |
+            artifacts/**
+            ops/grafana/dashboards/*.json
+            ops/prometheus/*.yml
+            ops/prometheus/alerts_slo.yml
+
+      - name: Run OTLP observability test (linux-py312 only)
+        if: ${{ matrix.os == 'ubuntu-latest' && matrix.python == '3.12' }}
+        env:
+          OTLP_ENABLE: '1'
+        run: |
+          pytest -q tests/observability/test_metrics_observability.py::test_otlp_real_hook_if_packages_installed
+
+  docker:
+    name: Build & Publish Docker Image
+    needs: test
+    if: ${{ github.event_name != 'pull_request' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build and (optionally) push
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: Dockerfile.prod
+          push: ${{ (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/')) && (vars.DOCKER_PUBLISH == '1' || vars.DOCKER_PUBLISH == 'true') }}
+          tags: |
+            ghcr.io/${{ github.repository }}:${{ github.sha }}
+            ghcr.io/${{ github.repository }}:latest
+
+  smoke:
+    name: Smoke Test Container
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      - name: Build app image
+        run: |
+          docker build -f Dockerfile.prod -t n5styleea-app:test .
+      - name: Run container and smoke test
+        run: |
+          docker run -d --name app \
+            -p 8000:8000 -p 9100:9100 \
+            -v "${{ github.workspace }}/ops/prometheus/secrets/admin_token:/run/secrets/admin_token:ro" \
+            -e ADMIN_TOKEN_FILE=/run/secrets/admin_token \
+            -e UVLOOP_ENABLE=1 \
+            n5styleea-app:test
+          sleep 6
+          curl -sS http://127.0.0.1:8000/health > smoke-health.json
+          curl -sS -H "Authorization: Bearer $(cat ops/prometheus/secrets/admin_token)" http://127.0.0.1:8000/metrics | head -n 100 > smoke-metrics.txt
+      - name: Upload smoke artifacts (always)
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-artifacts
+          path: |
+            smoke-health.json
+            smoke-metrics.txt
+      - name: Cleanup
+        if: ${{ always() }}
+        run: |
+          docker rm -f app || true
+
+  chaos:
+    name: Chaos WS MTTR Test
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+      - name: Install deps for chaos test
+        run: |
+          python -m pip install --upgrade pip
+          pip install pytest pytest-asyncio pandas numpy
+      - name: Run chaos MTTR test
+        run: |
+          pytest -q tests/chaos/test_ws_chaos_mttr.py -q
+
+  db-migrations:
+    name: Alembic Migrations & DB Recovery
+    needs: test
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: n5trading
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 10s --health-timeout 5s --health-retries 5
+    env:
+      ORDERS_DB_URL: postgresql+psycopg2://postgres:postgres@localhost:5432/n5trading
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+      - name: Install Alembic and DB deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install alembic SQLAlchemy psycopg2-binary
+      - name: Run Alembic upgrade head
+        run: |
+          alembic -c alembic.ini upgrade head
+      - name: Run DB recovery test
+        run: |
+          pip install -e . || true
+          pip install pytest
+          pytest -q tests/integration/test_db_recovery_pg.py -q
+
+  trivy-scan:
+    name: Trivy Vulnerability Scan (FS)
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run Trivy FS scan
+        uses: aquasecurity/trivy-action@0.20.0
+        with:
+          scan-type: 'fs'
+          ignore-unfixed: true
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+          severity: 'HIGH,CRITICAL'
+      - name: Upload Trivy report (always)
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: trivy-results
+          path: trivy-results.sarif
+
+  e2e-testnet:
+    if: ${{ secrets.EXCHANGE_API_KEY != '' && secrets.EXCHANGE_API_SECRET != '' && (vars.ENABLE_E2E_TESTNET == '1' || vars.ENABLE_E2E_TESTNET == 'true') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+      - name: Install deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install pytest pytest-asyncio ccxt httpx
+      - name: Run E2E testnet smoke
+        env:
+          E2E_TESTNET: '1'
+          CCXT_SANDBOX: '1'
+          EXCHANGE_NAME: ${{ vars.EXCHANGE_NAME }}
+          EXCHANGE_API_KEY: ${{ secrets.EXCHANGE_API_KEY }}
+          EXCHANGE_API_SECRET: ${{ secrets.EXCHANGE_API_SECRET }}
+          E2E_SYMBOL: ${{ vars.E2E_SYMBOL }}
+          E2E_SIDE: ${{ vars.E2E_SIDE }}
+          E2E_QTY: ${{ vars.E2E_QTY }}
+        run: |
+          pytest -q tests/integration/test_e2e_testnet_smoke.py -q
+
+  secrets-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        continue-on-error: true
+        with:
+          args: --no-git -v
+
+  trivy-image:
+    name: Trivy Vulnerability Scan (Image)
+    needs: docker
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Prepare image reference (pull or build)
+        run: |
+          set -e
+          IMAGE="ghcr.io/${{ github.repository }}:${{ github.sha }}"
+          if docker pull "$IMAGE"; then
+            echo "IMAGE=$IMAGE" >> "$GITHUB_ENV"
+          else
+            docker build -f Dockerfile.prod -t localapp:${{ github.sha }} .
+            echo "IMAGE=localapp:${{ github.sha }}" >> "$GITHUB_ENV"
+          fi
+      - name: Run Trivy image scan
+        uses: aquasecurity/trivy-action@0.20.0
+        with:
+          image-ref: ${{ env.IMAGE }}
+          ignore-unfixed: true
+          format: 'sarif'
+          output: 'trivy-image.sarif'
+          severity: 'HIGH,CRITICAL'
+      - name: Upload Trivy image report (always)
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: trivy-image-results
+          path: trivy-image.sarif
+
+  grype-image:
+    name: Grype Vulnerability Scan (Image)
+    needs: docker
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Prepare image reference (pull or build)
+        run: |
+          set -e
+          IMAGE="ghcr.io/${{ github.repository }}:${{ github.sha }}"
+          if docker pull "$IMAGE"; then
+            echo "IMAGE=$IMAGE" >> "$GITHUB_ENV"
+          else
+            docker build -f Dockerfile.prod -t localapp:${{ github.sha }} .
+            echo "IMAGE=localapp:${{ github.sha }}" >> "$GITHUB_ENV"
+          fi
+      - name: Install Grype
+        run: |
+          set -e
+          curl -sSfL https://raw.githubusercontent.com/anchore/grype/main/install.sh | sh -s -- -b /usr/local/bin
+          grype version
+      - name: Run Grype image scan
+        run: |
+          set -e
+          grype "${{ env.IMAGE }}" -q -o sarif > grype-image.sarif || true
+      - name: Upload Grype image report (always)
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: grype-image-results
+          path: grype-image.sarif
+
+  grype-sbom:
+    name: Grype SBOM Scan
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download CycloneDX SBOM artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: cyclonedx-sbom
+          path: .
+      - name: Install Grype
+        run: |
+          set -e
+          curl -sSfL https://raw.githubusercontent.com/anchore/grype/main/install.sh | sh -s -- -b /usr/local/bin
+          grype version
+      - name: Scan SBOM with Grype
+        run: |
+          set -e
+          if [ ! -f sbom.json ]; then echo "SBOM not found" >&2; exit 1; fi
+          # Generate SARIF output; do not fail the build on findings
+          grype sbom:sbom.json -q -o sarif > grype-sbom.sarif || true
+      - name: Upload Grype SBOM report (always)
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: grype-sbom-results
+          path: grype-sbom.sarif

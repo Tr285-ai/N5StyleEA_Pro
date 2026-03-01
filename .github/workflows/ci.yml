@@ -3,6 +3,8 @@ name: Integration Tests
 on:
   push:
     branches: [ main, develop ]
+    tags:
+      - 'v*'
   pull_request:
     branches: [ main, develop ]
 
@@ -276,8 +278,8 @@ jobs:
 
   trivy-image:
     name: Trivy Vulnerability Scan (Image)
-    needs: docker
     runs-on: ubuntu-latest
+    if: ${{ always() && github.event_name != 'pull_request' }}
     steps:
       - uses: actions/checkout@v4
       - name: Log in to GHCR
@@ -313,8 +315,8 @@ jobs:
 
   grype-image:
     name: Grype Vulnerability Scan (Image)
-    needs: docker
     runs-on: ubuntu-latest
+    if: ${{ always() && github.event_name != 'pull_request' }}
     steps:
       - uses: actions/checkout@v4
       - name: Log in to GHCR

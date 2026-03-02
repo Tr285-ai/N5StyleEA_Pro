@@ -1,0 +1,36 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: trading-bot
+  labels:
+    app: trading-bot
+spec:
+  groups:
+    - name: trading-bot-availability
+      rules:
+        - alert: TradingBotDown
+          expr: up{service="trading-bot"} == 0
+          for: 2m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Trading-bot is down"
+            description: "Prometheus scrape target for service=trading-bot is failing."
+    - name: trading-bot-runtime
+      rules:
+        - alert: EventLoopLagHigh
+          expr: n5_event_loop_lag_ms > 500
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "High event loop lag"
+            description: "n5_event_loop_lag_ms exceeded 500ms for 5m."
+        - alert: BackpressureRejectionsBurst
+          expr: increase(n5_counter_backpressure_rejections_total_total[5m]) > 50
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Backpressure rejections burst"
+            description: "More than 50 HTTP requests were rejected due to backpressure in the last 5m."

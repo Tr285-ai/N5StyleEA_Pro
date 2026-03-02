@@ -12,6 +12,7 @@ from dotenv import load_dotenv
 from fastapi import FastAPI, Response, WebSocket, WebSocketDisconnect, Request, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+from starlette.middleware.base import BaseHTTPMiddleware
 from performance_monitor import performance_monitor
 try:
     from alembic.config import Config as AlembicConfig  # type: ignore
@@ -42,6 +43,52 @@ except Exception:
     # Do not fail startup if file handler cannot be created
     pass
 logger = logging.getLogger(__name__)
+
+class BackpressureMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):  # type: ignore[override]
+        # Only apply to HTTP requests; BaseHTTPMiddleware does not affect websockets
+        sem = getattr(request.app.state, "bp_semaphore", None)
+        if sem is None:
+            return await call_next(request)
+        try:
+            timeout = float(getattr(request.app.state, "bp_queue_timeout", 0.05))
+        except Exception:
+            timeout = 0.05
+
+        acquired = False
+        try:
+            try:
+                await asyncio.wait_for(sem.acquire(), timeout=timeout)
+                acquired = True
+                try:
+                    # increment inflight counter
+                    cur = int(getattr(request.app.state, "bp_inflight", 0))
+                    request.app.state.bp_inflight = cur + 1
+                    performance_monitor.set_gauge("http_inflight", float(request.app.state.bp_inflight))
+                except Exception:
+                    pass
+            except asyncio.TimeoutError:
+                try:
+                    performance_monitor.increment_counter("backpressure_rejections", 1)
+                except Exception:
+                    pass
+                return Response(content='{"detail":"too many requests"}', media_type="application/json", status_code=429, headers={"Retry-After": "1"})
+
+            response = await call_next(request)
+            return response
+        finally:
+            if acquired:
+                try:
+                    sem.release()
+                    try:
+                        # decrement inflight counter
+                        cur = int(getattr(request.app.state, "bp_inflight", 1))
+                        request.app.state.bp_inflight = max(0, cur - 1)
+                        performance_monitor.set_gauge("http_inflight", float(request.app.state.bp_inflight))
+                    except Exception:
+                        pass
+                except Exception:
+                    pass
 
 class ConnectionManager:
     def __init__(self):
@@ -74,6 +121,21 @@ async def lifespan(app: FastAPI):
     # Initialize resources here: construct and start the TradingBot as a background task
     try:
         load_dotenv()
+        # Backpressure/concurrency limits (HTTP only)
+        try:
+            max_conc = max(1, int(os.getenv("MAX_CONCURRENCY", "100")))
+        except Exception:
+            max_conc = 100
+        try:
+            q_timeout_ms = max(0, int(os.getenv("BP_QUEUE_TIMEOUT_MS", "50")))
+        except Exception:
+            q_timeout_ms = 50
+        try:
+            app.state.bp_semaphore = asyncio.Semaphore(max_conc)
+            app.state.bp_queue_timeout = float(q_timeout_ms) / 1000.0
+            app.state.bp_inflight = 0
+        except Exception:
+            logger.exception("Failed to initialize backpressure controls")
         # Optional DB migration on startup (opt-in via env)
         try:
             migrate_on_start = str(os.getenv("DB_MIGRATE_ON_START", "0")).lower() in {"1", "true", "yes", "on"}
@@ -163,6 +225,7 @@ async def lifespan(app: FastAPI):
 
 # Create FastAPI app with lifespan management
 app = FastAPI(lifespan=lifespan)
+app.add_middleware(BackpressureMiddleware)
 manager = ConnectionManager()
 
 def _get_admin_token() -> str | None:

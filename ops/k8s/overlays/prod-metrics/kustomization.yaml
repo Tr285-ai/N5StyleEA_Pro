@@ -3,3 +3,5 @@ kind: Kustomization
 resources:
   - ../prod-stable
   - ingress-metrics.yaml
+  - ../../monitoring/servicemonitor.yaml
+  - ../../monitoring/prometheusrule.yaml

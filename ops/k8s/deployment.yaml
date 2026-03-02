@@ -42,6 +42,10 @@ spec:
               key: ORDERS_DB_URL
         - name: DB_MIGRATE_ON_START
           value: "1"
+        - name: MAX_CONCURRENCY
+          value: "200"
+        - name: BP_QUEUE_TIMEOUT_MS
+          value: "100"
         - name: HOST
           value: "0.0.0.0"
         - name: PORT

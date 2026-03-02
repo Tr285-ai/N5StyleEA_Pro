@@ -1,0 +1,57 @@
+name: Weekly Security Scans
+
+on:
+  schedule:
+    - cron: '0 3 * * 0'
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  deps-and-fs:
+    name: Dependency + FS Scans
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+      - name: Install tools
+        run: |
+          python -m pip install --upgrade pip
+          pip install pip-audit cyclonedx-bom
+      - name: pip-audit (do not fail build)
+        run: |
+          pip-audit -r requirements.txt -f json -o pip-audit.json || true
+      - name: Generate CycloneDX SBOM
+        run: |
+          cyclonedx-bom -o sbom.json -F || cyclonedx-bom -o sbom.json
+      - name: Install Grype
+        run: |
+          curl -sSfL https://raw.githubusercontent.com/anchore/grype/main/install.sh | sh -s -- -b /usr/local/bin
+          grype version
+      - name: Scan SBOM with Grype (SARIF)
+        run: |
+          grype sbom:sbom.json -q -o sarif > grype-sbom.sarif || true
+      - name: Trivy FS (SARIF)
+        uses: aquasecurity/trivy-action@0.20.0
+        with:
+          scan-type: 'fs'
+          ignore-unfixed: true
+          format: 'sarif'
+          output: 'trivy-fs.sarif'
+          severity: 'HIGH,CRITICAL'
+      - name: Upload security artifacts (always)
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: weekly-security-artifacts
+          path: |
+            pip-audit.json
+            sbom.json
+            grype-sbom.sarif
+            trivy-fs.sarif
+          if-no-files-found: warn

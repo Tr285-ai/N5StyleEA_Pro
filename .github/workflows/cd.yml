@@ -13,12 +13,15 @@ permissions:
 jobs:
   deploy-staging:
     name: Deploy to Staging
-    if: ${{ secrets.KUBE_CONFIG_STAGING_B64 != '' }}
     runs-on: ubuntu-latest
     env:
       DOCKER_IMAGE: ghcr.io/${{ github.repository }}:${{ github.sha }}
+      KUBE_CONFIG_B64: ${{ secrets.KUBE_CONFIG_STAGING_B64 }}
     steps:
       - uses: actions/checkout@v4
+      - name: Skip (no staging kubeconfig configured)
+        if: ${{ env.KUBE_CONFIG_B64 == '' }}
+        run: echo "KUBE_CONFIG_STAGING_B64 is empty; skipping staging deploy."
       - name: Set up kubectl
         uses: azure/setup-kubectl@v4
         with:
@@ -42,14 +45,14 @@ jobs:
           echo "Image did not become available in time" >&2
           exit 1
       - name: Write kubeconfig (staging)
-        env:
-          KUBE_CONFIG_B64: ${{ secrets.KUBE_CONFIG_STAGING_B64 }}
+        if: ${{ env.KUBE_CONFIG_B64 != '' }}
         run: |
           echo "$KUBE_CONFIG_B64" | base64 -d > "$GITHUB_WORKSPACE/kubeconfig-staging"
       - name: Deploy staging overlay and set image
         env:
           KUBECONFIG: ${{ github.workspace }}/kubeconfig-staging
           NS: ${{ vars.K8S_NAMESPACE_STAGING }}
+        if: ${{ env.KUBE_CONFIG_B64 != '' }}
         run: |
           set -euo pipefail
           NS="${NS:-staging}"
@@ -60,12 +63,16 @@ jobs:
   deploy-prod:
     name: Deploy to Prod
     needs: deploy-staging
-    if: ${{ secrets.KUBE_CONFIG_PROD_B64 != '' }}
     runs-on: ubuntu-latest
     env:
       DOCKER_IMAGE: ghcr.io/${{ github.repository }}:${{ github.sha }}
+      KUBE_CONFIG_B64: ${{ secrets.KUBE_CONFIG_PROD_B64 }}
+      HTPASSWD: ${{ secrets.METRICS_HTPASSWD }}
     steps:
       - uses: actions/checkout@v4
+      - name: Skip (no prod kubeconfig configured)
+        if: ${{ env.KUBE_CONFIG_B64 == '' }}
+        run: echo "KUBE_CONFIG_PROD_B64 is empty; skipping prod deploy."
       - name: Set up kubectl
         uses: azure/setup-kubectl@v4
         with:
@@ -89,8 +96,7 @@ jobs:
           echo "Image did not become available in time" >&2
           exit 1
       - name: Write kubeconfig (prod)
-        env:
-          KUBE_CONFIG_B64: ${{ secrets.KUBE_CONFIG_PROD_B64 }}
+        if: ${{ env.KUBE_CONFIG_B64 != '' }}
         run: |
           echo "$KUBE_CONFIG_B64" | base64 -d > "$GITHUB_WORKSPACE/kubeconfig-prod"
       - name: Deploy prod overlay (Let’s Encrypt or stable) and set image
@@ -99,6 +105,7 @@ jobs:
           NS: ${{ vars.K8S_NAMESPACE_PROD }}
           LETSENCRYPT: ${{ vars.ENABLE_LETSENCRYPT }}
           LETS_EMAIL: ${{ vars.LETSENCRYPT_EMAIL }}
+        if: ${{ env.KUBE_CONFIG_B64 != '' }}
         run: |
           set -euo pipefail
           NS="${NS:-prod}"
@@ -119,6 +126,7 @@ jobs:
         env:
           KUBECONFIG: ${{ github.workspace }}/kubeconfig-prod
           NS: ${{ vars.K8S_NAMESPACE_PROD }}
+        if: ${{ env.KUBE_CONFIG_B64 != '' }}
         run: |
           set -euo pipefail
           NS="${NS:-prod}"
@@ -130,6 +138,7 @@ jobs:
           KUBECONFIG: ${{ github.workspace }}/kubeconfig-prod
           NS: ${{ vars.K8S_NAMESPACE_PROD }}
           METRICS_BEARER_TOKEN: ${{ secrets.METRICS_BEARER_TOKEN }}
+        if: ${{ env.KUBE_CONFIG_B64 != '' }}
         run: |
           set -euo pipefail
           NS="${NS:-prod}"
@@ -141,7 +150,7 @@ jobs:
           kubectl -n "$NS" run smoke-metrics --image=curlimages/curl:8.5.0 --restart=Never --rm -i --env=TMP_TOKEN="$TMP_TOKEN" -- sh -lc 'curl -fsSL -H "Authorization: Bearer $TMP_TOKEN" http://trading-bot/metrics | head -n 5 >/dev/null'
 
       - name: Rollback on failure
-        if: ${{ failure() }}
+        if: ${{ failure() && env.KUBE_CONFIG_B64 != '' }}
         env:
           KUBECONFIG: ${{ github.workspace }}/kubeconfig-prod
           NS: ${{ vars.K8S_NAMESPACE_PROD }}
@@ -159,7 +168,7 @@ jobs:
           kubectl -n "$NS" get pods -o wide || true
 
       - name: Collect deploy diagnostics (on failure)
-        if: ${{ failure() }}
+        if: ${{ failure() && env.KUBE_CONFIG_B64 != '' }}
         env:
           KUBECONFIG: ${{ github.workspace }}/kubeconfig-prod
           NS: ${{ vars.K8S_NAMESPACE_PROD }}
@@ -186,7 +195,7 @@ jobs:
           path: deploy-artifacts
 
       - name: Notify rollback (Slack/Teams)
-        if: ${{ failure() }}
+        if: ${{ failure() && env.KUBE_CONFIG_B64 != '' }}
         env:
           KUBECONFIG: ${{ github.workspace }}/kubeconfig-prod
           NS: ${{ vars.K8S_NAMESPACE_PROD }}
@@ -204,11 +213,10 @@ jobs:
             curl -X POST -H 'Content-Type: application/json' -d "{\"text\":\"$MSG\"}" "$TEAMS_WEBHOOK_URL" || true
           fi
       - name: Protect /metrics with basic auth and apply metrics Ingress (optional)
-        if: ${{ (vars.ENABLE_METRICS_INGRESS == '1' || vars.ENABLE_METRICS_INGRESS == 'true') && secrets.METRICS_HTPASSWD != '' }}
+        if: ${{ (vars.ENABLE_METRICS_INGRESS == '1' || vars.ENABLE_METRICS_INGRESS == 'true') && env.HTPASSWD != '' && env.KUBE_CONFIG_B64 != '' }}
         env:
           KUBECONFIG: ${{ github.workspace }}/kubeconfig-prod
           NS: ${{ vars.K8S_NAMESPACE_PROD }}
-          HTPASSWD: ${{ secrets.METRICS_HTPASSWD }}
         run: |
           set -euo pipefail
           NS="${NS:-prod}"

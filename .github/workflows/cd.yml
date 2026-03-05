@@ -48,6 +48,15 @@ jobs:
         if: ${{ env.KUBE_CONFIG_B64 != '' }}
         run: |
           echo "$KUBE_CONFIG_B64" | base64 -d > "$GITHUB_WORKSPACE/kubeconfig-staging"
+      - name: Ensure namespace exists (staging)
+        env:
+          KUBECONFIG: ${{ github.workspace }}/kubeconfig-staging
+          NS: ${{ vars.K8S_NAMESPACE_STAGING }}
+        if: ${{ env.KUBE_CONFIG_B64 != '' }}
+        run: |
+          set -euo pipefail
+          NS="${NS:-staging}"
+          kubectl get ns "$NS" || kubectl create ns "$NS"
       - name: Deploy staging overlay and set image
         env:
           KUBECONFIG: ${{ github.workspace }}/kubeconfig-staging
@@ -99,6 +108,15 @@ jobs:
         if: ${{ env.KUBE_CONFIG_B64 != '' }}
         run: |
           echo "$KUBE_CONFIG_B64" | base64 -d > "$GITHUB_WORKSPACE/kubeconfig-prod"
+      - name: Ensure namespace exists (prod)
+        env:
+          KUBECONFIG: ${{ github.workspace }}/kubeconfig-prod
+          NS: ${{ vars.K8S_NAMESPACE_PROD }}
+        if: ${{ env.KUBE_CONFIG_B64 != '' }}
+        run: |
+          set -euo pipefail
+          NS="${NS:-prod}"
+          kubectl get ns "$NS" || kubectl create ns "$NS"
       - name: Deploy prod overlay (Let’s Encrypt or stable) and set image
         env:
           KUBECONFIG: ${{ github.workspace }}/kubeconfig-prod

@@ -1,19 +1,20 @@
 name: Test Self-Hosted Runner
 
 on:
-  workflow_dispatch:  # Lets you run it manually from GitHub UI
+  workflow_dispatch:
 
 jobs:
   test:
-    runs-on: self-hosted   # Or add labels: [self-hosted, windows] if you customized
+    runs-on: [self-hosted, windows, docker]  # ← Make sure this matches your runner's labels!
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Run a simple command
+      - name: Run commands
         run: |
-          echo "Hello from my self-hosted Windows runner!"
+          echo "Test from self-hosted runner win-docker-01"
           dir
           whoami
           Get-Date
+          docker --version

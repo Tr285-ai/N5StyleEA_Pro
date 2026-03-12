@@ -14,20 +14,20 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.12'          # Matches your 3.12.10
-
-      - name: Debug import path
-        run: |
-          pwd
-          python -c "import sys; print('sys.path:\n' + '\n'.join(sys.path))"
-          ls -la streaming || echo "No streaming folder visible"
+          python-version: '3.12'
 
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install pytest              # Add more if needed, e.g. pip install -r requirements.txt
+          pip install pytest  # add more packages here if your test needs them
 
-      - name: Run pytest with PYTHONPATH set to repo root
+      - name: Run pytest (with repo root in PYTHONPATH)
         run: pytest -q tests/chaos/test_ws_chaos_mttr.py -q
         env:
-          PYTHONPATH: ${{ github.workspace }}   # ← Key fix: adds repo root to sys.path
+          PYTHONPATH: ${{ github.workspace }}  # ← This adds C:\actions-runner\_work\...\repo to sys.path
+
+      # Optional debug – keep for now to verify
+      - name: Debug Python environment (before pytest)
+        run: |
+          pwd
+          python -c "import sys; print('sys.path:\n' + '\n'.join(sys.path))"

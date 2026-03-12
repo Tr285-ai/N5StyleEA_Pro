@@ -16,6 +16,12 @@ jobs:
         with:
           python-version: '3.12'          # Matches your 3.12.10
 
+      - name: Debug import path
+        run: |
+          pwd
+          python -c "import sys; print('sys.path:\n' + '\n'.join(sys.path))"
+          ls -la streaming || echo "No streaming folder visible"
+
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip

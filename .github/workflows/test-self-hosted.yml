@@ -1,20 +1,28 @@
 name: Test Self-Hosted Runner
 
 on:
-  workflow_dispatch:
+  workflow_dispatch:          # Run manually from GitHub UI
 
 jobs:
   test:
-    runs-on: [self-hosted, windows, docker]  # ← Make sure this matches your runner's labels!
+    runs-on: [self-hosted, windows, docker]   # Matches your runner labels exactly
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Run commands
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'          # Matches your local 3.12.10
+
+      - name: Install dependencies
         run: |
-          echo "Test from self-hosted runner win-docker-01"
-          dir
-          whoami
-          Get-Date
-          docker --version
+          python -m pip install --upgrade pip
+          pip install pytest   # Add other test deps here, e.g. pip install -r requirements-test.txt
+
+      - name: Install project in editable mode
+        run: pip install -e .     # ← This is the key fix for import errors
+
+      - name: Run tests
+        run: pytest -q tests/chaos/test_ws_chaos_mttr.py -q

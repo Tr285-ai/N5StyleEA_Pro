@@ -19,15 +19,11 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install pytest  # add more packages here if your test needs them
+          pip install pytest  # add any other test deps here
 
-      - name: Run pytest (with repo root in PYTHONPATH)
-        run: pytest -q tests/chaos/test_ws_chaos_mttr.py -q
-        env:
-          PYTHONPATH: ${{ github.workspace }}  # ← This adds C:\actions-runner\_work\...\repo to sys.path
-
-      # Optional debug – keep for now to verify
-      - name: Debug Python environment (before pytest)
+      - name: Run pytest with explicit sys.path fix
+        shell: pwsh   # Use PowerShell on Windows runner.
         run: |
-          pwd
-          python -c "import sys; print('sys.path:\n' + '\n'.join(sys.path))"
+          $repoRoot = "${{ github.workspace }}"
+          python -c "import sys; sys.path.insert(0, '$repoRoot'); print('Updated sys.path:', sys.path)"  # Debug: print path
+          python -m pytest -q tests/chaos/test_ws_chaos_mttr.py -q
